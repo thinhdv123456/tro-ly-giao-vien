@@ -1128,6 +1128,7 @@ const getGroqApiKey = () => (localStorage.getItem('groq_api_key') || '').trim();
 const saveGroqApiKey = (key) => localStorage.setItem('groq_api_key', (key || '').trim());
 const getClaudeApiKey = () => (localStorage.getItem('claude_api_key') || '').trim();
 const saveClaudeApiKey = (key) => localStorage.setItem('claude_api_key', (key || '').trim());
+const CLAUDE_MODEL = 'claude-opus-5'; // model Claude cho tác vụ nặng
 const getOllamaUrl = () => localStorage.getItem('ollama_url') || 'http://localhost:11434';
 const saveOllamaUrl = (url) => localStorage.setItem('ollama_url', url);
 const getUseOllama = () => localStorage.getItem('use_ollama') === 'true';
@@ -1230,7 +1231,9 @@ const callClaudeAPI = async (prompt, maxTokens = 1024) => {
       },
       body: JSON.stringify({
         prompt: prompt,
-        maxTokens: maxTokens
+        maxTokens: maxTokens,
+        apiKey: apiKey,
+        model: CLAUDE_MODEL
       })
     });
 
@@ -7771,15 +7774,15 @@ const SettingsTab = ({ data, setData, setActive, onRestoreData, fbUser, onSignOu
               </div>
               <div className="flex justify-between">
                 <span>📝 Mô hình:</span>
-                <span className="font-mono">claude-opus-4-6</span>
+                <span className="font-mono">claude-opus-5</span>
               </div>
               <div className="flex justify-between">
                 <span>💬 Input price:</span>
-                <span>$15 / 1M</span>
+                <span>$5 / 1M</span>
               </div>
               <div className="flex justify-between">
                 <span>📤 Output price:</span>
-                <span>$45 / 1M</span>
+                <span>$25 / 1M</span>
               </div>
             </div>
             <div className="mt-3 p-2 bg-amber-50 rounded text-xs text-amber-800 border border-amber-200">
@@ -7873,7 +7876,7 @@ const SettingsTab = ({ data, setData, setActive, onRestoreData, fbUser, onSignOu
               </p>
             </div>
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-900">
-              <p className="font-semibold mb-1">⭐ Model: Claude Opus 4.6</p>
+              <p className="font-semibold mb-1">⭐ Model: Claude Opus 5</p>
               <p>Chất lượng cao nhất, hiểu tiếng Việt tuyệt vời, tạo kế hoạch chi tiết</p>
             </div>
           </div>

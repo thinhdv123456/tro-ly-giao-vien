@@ -10,9 +10,14 @@ import os
 import json
 import shutil
 import datetime
+import urllib.request
+import urllib.error
 from http.server import ThreadingHTTPServer
 
 PORT = 8765
+# Model Claude mặc định cho tác vụ nặng (chấm bài, sinh đề...). Có thể đổi ở app.
+CLAUDE_MODEL_DEFAULT = "claude-opus-5"
+CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE, "DuLieu")
 DATA_FILE = os.path.join(DATA_DIR, "TroLyGiaoVien_DuLieu.json")
@@ -43,6 +48,47 @@ def _save_inbox(items):
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(items, f, ensure_ascii=False, indent=2)
     os.replace(tmp, INBOX_FILE)
+
+
+def _call_claude(prompt, max_tokens, api_key, model):
+    """Gọi Anthropic Messages API phía máy chủ (tránh CORS của trình duyệt).
+    Trả về (text, error). API key lấy từ app (localStorage) hoặc biến môi trường."""
+    key = (api_key or os.environ.get("ANTHROPIC_API_KEY")
+           or os.environ.get("CLAUDE_API_KEY") or "").strip()
+    if not key:
+        return None, "Chưa có Claude API Key (nhập trong Cài đặt AI hoặc đặt biến ANTHROPIC_API_KEY)"
+
+    body = json.dumps({
+        "model": model or CLAUDE_MODEL_DEFAULT,
+        "max_tokens": int(max_tokens or 1024),
+        "messages": [{"role": "user", "content": prompt or ""}],
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        CLAUDE_API_URL,
+        data=body,
+        method="POST",
+        headers={
+            "content-type": "application/json",
+            "x-api-key": key,
+            "anthropic-version": "2023-06-01",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        # Ghép các khối text trong content lại
+        parts = [b.get("text", "") for b in data.get("content", []) if b.get("type") == "text"]
+        return ("".join(parts).strip() or "(Claude không trả về nội dung)"), None
+    except urllib.error.HTTPError as e:
+        try:
+            err = json.loads(e.read().decode("utf-8"))
+            msg = err.get("error", {}).get("message", str(e))
+        except Exception:
+            msg = "HTTP %s" % e.code
+        return None, "Claude API lỗi: %s" % msg
+    except Exception as e:
+        return None, "Lỗi kết nối Claude: %s" % e
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -116,6 +162,49 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self._send_json(200, {"ok": True})
             except Exception as e:
                 return self._send_json(500, {"ok": False, "error": str(e)})
+
+        # 🤖 Cửa trung gian gọi Claude API (app gửi prompt + key -> máy chủ gọi hộ)
+        if self.path == "/api/claude/message":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                text, err = _call_claude(
+                    payload.get("prompt"),
+                    payload.get("maxTokens", 1024),
+                    payload.get("apiKey"),
+                    payload.get("model"),
+                )
+                if err:
+                    return self._send_json(502, {"error": err})
+                return self._send_json(200, {"text": text})
+            except Exception as e:
+                return self._send_json(500, {"error": str(e)})
+
+        # 📥 Bộ đọc Zalo đẩy bài HS vào hộp thư đến
+        if self.path == "/api/zalo":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                item = json.loads(self.rfile.read(length).decode("utf-8"))
+                items = _load_inbox()
+                # Chống trùng: bỏ qua nếu đã có cùng id
+                new_id = item.get("id")
+                if new_id and any(x.get("id") == new_id for x in items):
+                    return self._send_json(200, {"ok": True, "duplicate": True, "count": len(items)})
+                item.setdefault("receivedAt", datetime.datetime.now().isoformat())
+                items.append(item)
+                _save_inbox(items)
+                return self._send_json(200, {"ok": True, "count": len(items)})
+            except Exception as e:
+                return self._send_json(500, {"ok": False, "error": str(e)})
+
+        # 🧹 App báo đã nhập xong -> xoá hộp thư đến
+        if self.path == "/api/zalo/clear":
+            try:
+                _save_inbox([])
+                return self._send_json(200, {"ok": True})
+            except Exception as e:
+                return self._send_json(500, {"ok": False, "error": str(e)})
+
         return self._send_json(404, {"ok": False, "error": "not found"})
 
     def log_message(self, *args):
