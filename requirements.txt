@@ -1,0 +1,4 @@
+# Thư viện cho bộ đọc Zalo (zalo_reader.py)
+# Cài bằng:  pip install -r requirements.txt
+#           python -m playwright install chromium
+playwright>=1.40

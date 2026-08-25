@@ -23,5 +23,11 @@ TroLyGiaoVien_Backup_*.json
 *.tmp
 scratchpad/
 
+# ====== BỘ ĐỌC ZALO — KHÔNG ĐƯA LÊN GITHUB ======
+# Cấu hình riêng (có thể chứa tên nhóm thật) + phiên đăng nhập Zalo (bí mật!)
+zalo_reader_config.json
+DuLieu/zalo_browser_profile/
+DuLieu/zalo_reader_state.json
+
 # Thư mục build tạm của Netlify
 dist/
