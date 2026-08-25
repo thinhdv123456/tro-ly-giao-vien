@@ -1,0 +1,15 @@
+# Cấu hình Netlify — tự động deploy từ GitHub
+# Mỗi lần code đẩy lên nhánh main, Netlify tự build và cập nhật website.
+# Nguồn duy nhất là TroLyGiaoVien_Phase4_REFACTORED.html -> sinh ra dist/index.html (tránh lệch bản).
+
+[build]
+  publish = "dist"
+  command = "mkdir -p dist && cp TroLyGiaoVien_Phase4_REFACTORED.html dist/index.html && printf '/*    /index.html    200\\n' > dist/_redirects"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Cache-Control = "public, max-age=0, must-revalidate"
