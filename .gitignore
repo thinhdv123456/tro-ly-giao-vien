@@ -8,6 +8,10 @@
 node_modules/
 *.log
 
+# Python
+__pycache__/
+*.pyc
+
 # ====== DỮ LIỆU CÁ NHÂN — KHÔNG ĐƯA LÊN GITHUB ======
 # (chứa tên học sinh, số điện thoại phụ huynh, điểm số...)
 DuLieu/
