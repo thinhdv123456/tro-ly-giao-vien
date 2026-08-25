@@ -1,0 +1,20 @@
+# Netlify
+.netlify
+
+# macOS
+.DS_Store
+
+# Node
+node_modules/
+*.log
+
+# ====== DỮ LIỆU CÁ NHÂN — KHÔNG ĐƯA LÊN GITHUB ======
+# (chứa tên học sinh, số điện thoại phụ huynh, điểm số...)
+DuLieu/
+TroLyGiaoVien_DuLieu*.json
+TroLyGiaoVien_Backup_*.json
+*_backup*.json
+
+# File tạm
+*.tmp
+scratchpad/

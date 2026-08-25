@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "trolygv-server",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["trolygv_server.py"],
+      "port": 8765
+    }
+  ]
+}
