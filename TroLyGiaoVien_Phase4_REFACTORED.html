@@ -20,6 +20,10 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- ☁️ Firebase (đồng bộ đám mây) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700;800&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
@@ -952,6 +956,82 @@ const serverWriteData = (payload) => {
   __serverWriteTimer = setTimeout(() => {
     fetch(SERVER_DATA_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => {});
   }, 600);
+};
+
+// ============== ☁️ ĐỒNG BỘ ĐÁM MÂY (Firebase) ==============
+// Dữ liệu được lưu trên máy chủ Google -> mở ở bất kỳ máy/điện thoại nào cũng thấy y nguyên.
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyD3sPLDkup2CScwuDppf6xMTXIeXcdPHa4",
+  authDomain: "tro-ly-giao-vien.firebaseapp.com",
+  projectId: "tro-ly-giao-vien",
+  storageBucket: "tro-ly-giao-vien.firebasestorage.app",
+  messagingSenderId: "265598885819",
+  appId: "1:265598885819:web:afcf8cd9be76804cd36e9e"
+};
+let fbAuth = null, fbDb = null, fbReady = false;
+const FB_CHUNK = 600000; // chia dữ liệu thành mảnh ~600KB để không vướng giới hạn 1MB/tài liệu của Firestore
+
+const initFirebase = () => {
+  try {
+    if (fbReady) return true;
+    if (!window.firebase || !firebase.initializeApp) return false;
+    if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    fbAuth = firebase.auth();
+    fbDb = firebase.firestore();
+    try { fbDb.enablePersistence({ synchronizeTabs: true }).catch(() => {}); } catch {}
+    fbReady = true;
+    return true;
+  } catch (e) { console.error('Lỗi khởi tạo Firebase:', e); return false; }
+};
+
+// Ghi payload lên Firestore: chia JSON thành nhiều mảnh trong users/{uid}/chunks
+let __fbWriteTimer = null, __fbLastJson = '';
+const fbWriteDataNow = async (uid, payload) => {
+  if (!fbReady || !uid) return false;
+  try {
+    const json = JSON.stringify(payload);
+    __fbLastJson = json;
+    const parts = [];
+    for (let i = 0; i < json.length; i += FB_CHUNK) parts.push(json.slice(i, i + FB_CHUNK));
+    const userRef = fbDb.collection('users').doc(uid);
+    const batch = fbDb.batch();
+    parts.forEach((s, i) => batch.set(userRef.collection('chunks').doc('c' + i), { s }));
+    batch.set(userRef, { chunkCount: parts.length, updatedAt: Date.now(), size: json.length });
+    await batch.commit();
+    // dọn các mảnh cũ dư (nếu lần trước nhiều mảnh hơn)
+    try {
+      const old = await userRef.collection('chunks').get();
+      const delBatch = fbDb.batch();
+      old.forEach(d => { const n = parseInt(d.id.slice(1), 10); if (n >= parts.length) delBatch.delete(d.ref); });
+      await delBatch.commit();
+    } catch {}
+    return true;
+  } catch (e) { console.error('Lỗi ghi đám mây:', e); return false; }
+};
+const fbWriteDataDebounced = (uid, payload) => {
+  if (!fbReady || !uid) return;
+  if (__fbWriteTimer) clearTimeout(__fbWriteTimer);
+  __fbWriteTimer = setTimeout(() => fbWriteDataNow(uid, payload), 900);
+};
+
+// Đọc payload từ Firestore (ghép các mảnh lại)
+const fbReadData = async (uid) => {
+  if (!fbReady || !uid) return null;
+  try {
+    const userRef = fbDb.collection('users').doc(uid);
+    const meta = await userRef.get();
+    if (!meta.exists) return null;
+    const n = (meta.data() || {}).chunkCount || 0;
+    if (!n) return null;
+    let json = '';
+    for (let i = 0; i < n; i++) {
+      const c = await userRef.collection('chunks').doc('c' + i).get();
+      json += (c.exists ? (c.data().s || '') : '');
+    }
+    if (!json) return null;
+    __fbLastJson = json;
+    return JSON.parse(json);
+  } catch (e) { console.error('Lỗi đọc đám mây:', e); return null; }
 };
 
 // Export toàn bộ dữ liệu ra file .json để chuyển sang máy khác
@@ -7597,8 +7677,26 @@ const DataSafetyCard = ({ onRestoreData }) => {
   );
 };
 
+// ============== ☁️ THẺ TÀI KHOẢN ĐÁM MÂY ==============
+const CloudAccountCard = ({ fbUser, onSignOut }) => {
+  if (!fbUser) return null;
+  return (
+    <div className="bg-white rounded-2xl p-6 mb-6 border-2 border-teal-200 shadow-sm">
+      <h2 className="text-lg font-bold text-slate-800 mb-1 flex items-center gap-2"><span className="text-xl">☁️</span> Tài khoản đám mây</h2>
+      <p className="text-sm text-slate-500 mb-3">Dữ liệu của cô đang được <strong>đồng bộ tự động</strong> qua tài khoản này. Đăng nhập cùng email trên máy/điện thoại khác là thấy y nguyên.</p>
+      <div className="flex items-center justify-between bg-teal-50 border border-teal-100 rounded-xl px-4 py-3">
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-teal-600">✅</span>
+          <span className="text-slate-700">Đang đăng nhập: <strong className="text-teal-800">{fbUser.email}</strong></span>
+        </div>
+        <button onClick={onSignOut} className="text-sm px-3 py-1.5 rounded-lg bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 font-medium">Đăng xuất</button>
+      </div>
+    </div>
+  );
+};
+
 // ============== SETTINGS TAB COMPONENT ==============
-const SettingsTab = ({ data, setData, setActive, onRestoreData }) => {
+const SettingsTab = ({ data, setData, setActive, onRestoreData, fbUser, onSignOut }) => {
   const [groqApiKey, setGroqApiKey] = useState(getGroqApiKey());
   const [claudeApiKey, setClaudeApiKey] = useState(getClaudeApiKey());
   const [ollamaUrl, setOllamaUrl] = useState(getOllamaUrl());
@@ -7645,6 +7743,9 @@ const SettingsTab = ({ data, setData, setActive, onRestoreData }) => {
         <h1 className="text-3xl font-bold text-slate-800 mb-2 font-display">⚙️ Cài đặt AI & LLM</h1>
         <p className="text-slate-600">Kết nối với Groq Cloud API hoặc Ollama local để chấm bài, sinh đề, tạo phiếu phụ huynh bằng AI</p>
       </div>
+
+      {/* ☁️ Tài khoản đám mây */}
+      <CloudAccountCard fbUser={fbUser} onSignOut={onSignOut} />
 
       {/* 🛟 An toàn dữ liệu — đặt lên đầu cho dễ thấy */}
       <DataSafetyCard onRestoreData={onRestoreData} />
@@ -8724,6 +8825,91 @@ const HamburgerOverlay = ({ active, setActive, onChatOpen, onClose }) => {
 };
 
 // ============== APP ==============
+// ============== ☁️ MÀN HÌNH ĐĂNG NHẬP ĐÁM MÂY ==============
+const AuthScreen = () => {
+  const [mode, setMode] = useState('login'); // 'login' | 'signup'
+  const [email, setEmail] = useState('');
+  const [pass, setPass] = useState('');
+  const [pass2, setPass2] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const prettyErr = (code) => {
+    const m = {
+      'auth/invalid-email': 'Email không hợp lệ.',
+      'auth/user-not-found': 'Chưa có tài khoản này. Hãy bấm "Tạo tài khoản mới".',
+      'auth/wrong-password': 'Sai mật khẩu.',
+      'auth/invalid-credential': 'Sai email hoặc mật khẩu.',
+      'auth/email-already-in-use': 'Email này đã có tài khoản. Hãy đăng nhập.',
+      'auth/weak-password': 'Mật khẩu quá ngắn (cần ít nhất 6 ký tự).',
+      'auth/network-request-failed': 'Lỗi mạng. Kiểm tra kết nối internet.',
+    };
+    return m[code] || ('Có lỗi: ' + code);
+  };
+
+  const submit = async () => {
+    setErr('');
+    if (!email.trim() || !pass) { setErr('Cô nhập email và mật khẩu nhé.'); return; }
+    if (mode === 'signup' && pass !== pass2) { setErr('Hai ô mật khẩu chưa giống nhau.'); return; }
+    setBusy(true);
+    try {
+      if (mode === 'login') await fbAuth.signInWithEmailAndPassword(email.trim(), pass);
+      else await fbAuth.createUserWithEmailAndPassword(email.trim(), pass);
+      // onAuthStateChanged ở App sẽ tự nhận và vào chương trình
+    } catch (e) {
+      setErr(prettyErr(e.code || e.message));
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="flex items-center justify-center min-h-screen gradient-bg p-4">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-6">
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-teal-600 to-rose-500 flex items-center justify-center text-white text-3xl mb-3 shadow-lg">📖</div>
+          <h1 className="text-2xl font-bold text-slate-800 font-display">Trợ Lý Giáo Viên Ngữ Văn</h1>
+          <p className="text-slate-500 text-sm mt-1">{mode === 'login' ? 'Đăng nhập để mở dữ liệu của cô ở mọi nơi 🌸' : 'Tạo tài khoản để bắt đầu 🌸'}</p>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-xl border border-teal-100 p-6">
+          <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="vd: thinhdv1@gmail.com"
+            className="w-full px-3 py-2.5 border border-slate-200 rounded-xl mb-3 focus:border-teal-400 outline-none" autoFocus />
+
+          <label className="block text-sm font-medium text-slate-700 mb-1">Mật khẩu</label>
+          <input type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="Ít nhất 6 ký tự"
+            onKeyDown={e => { if (e.key === 'Enter' && mode === 'login') submit(); }}
+            className="w-full px-3 py-2.5 border border-slate-200 rounded-xl mb-3 focus:border-teal-400 outline-none" />
+
+          {mode === 'signup' && (
+            <>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Nhập lại mật khẩu</label>
+              <input type="password" value={pass2} onChange={e => setPass2(e.target.value)} placeholder="Gõ lại mật khẩu"
+                onKeyDown={e => { if (e.key === 'Enter') submit(); }}
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl mb-3 focus:border-teal-400 outline-none" />
+            </>
+          )}
+
+          {err && <div className="text-sm bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2 mb-3">⚠️ {err}</div>}
+
+          <button onClick={submit} disabled={busy}
+            className="w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-teal-600 to-teal-700 hover:shadow-md disabled:opacity-60 transition">
+            {busy ? 'Đang xử lý...' : (mode === 'login' ? 'Đăng nhập' : 'Tạo tài khoản')}
+          </button>
+
+          <div className="text-center mt-4 text-sm text-slate-500">
+            {mode === 'login' ? (
+              <>Chưa có tài khoản? <button onClick={() => { setMode('signup'); setErr(''); }} className="text-teal-700 font-semibold hover:underline">Tạo tài khoản mới</button></>
+            ) : (
+              <>Đã có tài khoản? <button onClick={() => { setMode('login'); setErr(''); }} className="text-teal-700 font-semibold hover:underline">Đăng nhập</button></>
+            )}
+          </div>
+        </div>
+        <p className="text-center text-[11px] text-slate-400 mt-4">Dữ liệu được đồng bộ an toàn qua tài khoản này. Đăng nhập cùng email trên máy/điện thoại khác là thấy y nguyên.</p>
+      </div>
+    </div>
+  );
+};
+
 const App = () => {
   const [active, setActive] = useState('dashboard');
   const [collapsed, setCollapsed] = useState(false);
@@ -8734,51 +8920,13 @@ const App = () => {
   const [teacherName, setTeacherName] = useState('');
   const [schoolName, setSchoolName] = useState('');
   const [showChat, setShowChat] = useState(false);
+  const [fbUser, setFbUser] = useState(null);        // ☁️ tài khoản đám mây đang đăng nhập
+  const [authReady, setAuthReady] = useState(false);  // đã kiểm tra tình trạng đăng nhập xong chưa
   const dataLoadedRef = useRef(false); // 🛟 chốt an toàn: chỉ cho phép lưu SAU khi đã nạp xong dữ liệu cũ
+  const cloudRef = useRef(false);      // đám mây có dùng được không
+  const fbUserRef = useRef(null);      // giữ uid mới nhất cho hàm lưu
 
-  useEffect(() => {
-    const saved = loadData();
-    setDataState(saved.items || {});
-    setSelectedClass(saved.selectedClass || 6);
-    setSelectedBook(saved.selectedBook || 'ketnoi');
-    setTeacherName(saved.teacherName || '');
-    setSchoolName(saved.schoolName || '');
-    // Lấy lại "địa chỉ" thư mục lưu trên máy đã chọn lần trước (nếu có)
-    fsRestoreDirectory();
-    // Yêu cầu trình duyệt GIỮ BỀN dữ liệu — không tự xoá khi máy thiếu dung lượng
-    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch {}
-
-    // ⚡ CHẾ ĐỘ TỰ ĐỘNG: nếu mở qua nút "▶️ Mở Trợ Lý" (có máy chủ), tự nạp dữ liệu từ file trên máy
-    (async () => {
-      const res = await serverLoadData();
-      if (!res.available) return; // không có máy chủ -> dùng trình duyệt như thường
-      if (res.data && res.data.items && Object.keys(res.data.items).length > 0) {
-        // File trên máy là BẢN CHÍNH -> nạp vào chương trình
-        const d = res.data;
-        setDataState(d.items || {});
-        if (d.selectedClass) setSelectedClass(d.selectedClass);
-        if (d.selectedBook) setSelectedBook(d.selectedBook);
-        if (d.teacherName != null) setTeacherName(d.teacherName);
-        if (d.schoolName != null) setSchoolName(d.schoolName);
-      } else {
-        // File trên máy còn trống -> đẩy dữ liệu hiện có (từ trình duyệt) lên file
-        serverWriteData({ items: saved.items || {}, selectedClass: saved.selectedClass || 6, selectedBook: saved.selectedBook || 'ketnoi', teacherName: saved.teacherName || '', schoolName: saved.schoolName || '' });
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
-    // Bỏ qua lần chạy ĐẦU TIÊN (lúc data còn rỗng, chưa nạp xong) để không ghi đè mất dữ liệu cũ
-    if (!dataLoadedRef.current) { dataLoadedRef.current = true; return; }
-    const payload = { items: data, selectedClass, selectedBook, teacherName, schoolName };
-    saveData(payload);            // lưu vào trình duyệt (nhanh, luôn có)
-    fsWriteDataDebounced(payload); // ghi ra file qua thư mục (nếu đã kết nối thủ công)
-    serverWriteData(payload);      // ⚡ ghi ra file qua máy chủ (tự động, không cần bấm)
-  }, [data, selectedClass, selectedBook, teacherName, schoolName]);
-
-  const setData = (d) => setDataState(d);
-
-  // Tải dữ liệu từ file trên máy vào chương trình (dùng khi kết nối thư mục có sẵn dữ liệu)
+  // Nạp một gói dữ liệu vào chương trình (dùng khi khôi phục từ file/đám mây)
   const applyRestoredPayload = (payload) => {
     if (!payload) return;
     if (payload.items) setDataState(payload.items);
@@ -8787,6 +8935,62 @@ const App = () => {
     if (payload.teacherName != null) setTeacherName(payload.teacherName);
     if (payload.schoolName != null) setSchoolName(payload.schoolName);
   };
+
+  useEffect(() => {
+    const saved = loadData();
+    setDataState(saved.items || {});
+    setSelectedClass(saved.selectedClass || 6);
+    setSelectedBook(saved.selectedBook || 'ketnoi');
+    setTeacherName(saved.teacherName || '');
+    setSchoolName(saved.schoolName || '');
+    fsRestoreDirectory();
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch {}
+
+    const cloud = initFirebase();
+    cloudRef.current = cloud;
+    if (cloud) {
+      // ☁️ Đám mây là BẢN CHÍNH. Sau khi đăng nhập sẽ nạp dữ liệu từ đám mây về.
+      fbAuth.onAuthStateChanged(async (user) => {
+        fbUserRef.current = user || null;
+        setFbUser(user || null);
+        setAuthReady(true);
+        if (user) {
+          const remote = await fbReadData(user.uid);
+          if (remote && remote.items && Object.keys(remote.items).length > 0) {
+            applyRestoredPayload(remote); // đám mây có dữ liệu -> dùng bản đám mây
+          } else {
+            // đám mây trống -> đẩy dữ liệu hiện có trên máy này lên đám mây
+            fbWriteDataNow(user.uid, { items: saved.items || {}, selectedClass: saved.selectedClass || 6, selectedBook: saved.selectedBook || 'ketnoi', teacherName: saved.teacherName || '', schoolName: saved.schoolName || '' });
+          }
+        }
+      });
+    } else {
+      // Không có đám mây -> dùng máy chủ/localStorage như cũ
+      setAuthReady(true);
+      (async () => {
+        const res = await serverLoadData();
+        if (!res.available) return;
+        if (res.data && res.data.items && Object.keys(res.data.items).length > 0) {
+          applyRestoredPayload(res.data);
+        } else {
+          serverWriteData({ items: saved.items || {}, selectedClass: saved.selectedClass || 6, selectedBook: saved.selectedBook || 'ketnoi', teacherName: saved.teacherName || '', schoolName: saved.schoolName || '' });
+        }
+      })();
+    }
+  }, []);
+
+  useEffect(() => {
+    // Bỏ qua lần chạy ĐẦU TIÊN (lúc data còn rỗng, chưa nạp xong) để không ghi đè mất dữ liệu cũ
+    if (!dataLoadedRef.current) { dataLoadedRef.current = true; return; }
+    const payload = { items: data, selectedClass, selectedBook, teacherName, schoolName };
+    saveData(payload);             // lưu vào trình duyệt (nhanh, luôn có - bản cache)
+    fsWriteDataDebounced(payload);  // ghi ra file qua thư mục (nếu đã kết nối thủ công)
+    serverWriteData(payload);       // ghi ra file qua máy chủ (nếu mở bằng nút Mở Trợ Lý)
+    if (fbUserRef.current) fbWriteDataDebounced(fbUserRef.current.uid, payload); // ☁️ đồng bộ đám mây
+  }, [data, selectedClass, selectedBook, teacherName, schoolName]);
+
+  const setData = (d) => setDataState(d);
+  const handleSignOut = async () => { try { if (fbAuth) await fbAuth.signOut(); } catch {} };
   const activeMenu = MENU_ITEMS.find(m => m.id === active);
 
   const handleNavAndClose = (id) => {
@@ -8801,9 +9005,17 @@ const App = () => {
     if (active === 'exam') return <ExamTab data={data} setData={setData} selectedClass={selectedClass} selectedBook={selectedBook} teacherName={teacherName} schoolName={schoolName} setActive={handleNavAndClose} />;
     if (active === 'classes') return <ClassesTab data={data} setData={setData} selectedClass={selectedClass} selectedBook={selectedBook} teacherName={teacherName} schoolName={schoolName} setActive={handleNavAndClose} />;
     if (active === 'library') return <LibraryTab setActive={handleNavAndClose} />;
-    if (active === 'settings') return <SettingsTab data={data} setData={setData} setActive={handleNavAndClose} onRestoreData={applyRestoredPayload} />;
+    if (active === 'settings') return <SettingsTab data={data} setData={setData} setActive={handleNavAndClose} onRestoreData={applyRestoredPayload} fbUser={fbUser} onSignOut={handleSignOut} />;
     return <PhasePlaceholder item={activeMenu} />;
   };
+
+  // ☁️ Cổng đăng nhập đám mây: nếu bật đám mây mà chưa đăng nhập -> hiện màn hình đăng nhập
+  if (cloudRef.current && !authReady) {
+    return <div className="flex items-center justify-center h-screen gradient-bg"><div className="text-center"><div className="text-4xl mb-3 animate-pulse">🌸</div><p className="text-teal-700 font-medium">Đang tải Trợ Lý Giáo Viên...</p></div></div>;
+  }
+  if (cloudRef.current && authReady && !fbUser) {
+    return <AuthScreen />;
+  }
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">

@@ -20,6 +20,10 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- ☁️ Firebase (đồng bộ đám mây) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700;800&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
@@ -796,7 +800,239 @@ const MENU_ITEMS = [
 const STORAGE_KEY = 'tro_ly_gv_nguvan_thcs_v3';
 const APP_VERSION = '4.1';
 const loadData = () => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch { return {}; } };
-const saveData = (d) => localStorage.setItem(STORAGE_KEY, JSON.stringify(d));
+
+// 🛟 Lưu dữ liệu AN TOÀN: bắt lỗi khi bộ nhớ đầy, báo cho cô biết (chỉ báo 1 lần), trả về true/false
+let __quotaWarned = false;
+const saveData = (d) => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(d));
+    __quotaWarned = false;
+    return true;
+  } catch (e) {
+    const isQuota = e && (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014 || /quota|exceed/i.test(e.message || ''));
+    if (isQuota) {
+      if (!__quotaWarned) {
+        __quotaWarned = true;
+        alert('⚠️ BỘ NHỚ ĐÃ ĐẦY — KHÔNG LƯU ĐƯỢC!\n\nDữ liệu cô vừa nhập CHƯA được lưu lại. Nguyên nhân thường do ảnh bài làm học sinh chiếm quá nhiều chỗ.\n\n👉 Cách xử lý:\n1. Vào ⚙️ Cài đặt AI → mục "🛟 An toàn dữ liệu"\n2. Bấm "Sao lưu ra file" để giữ bản dự phòng\n3. Xoá bớt ảnh bài cũ để có chỗ trống');
+      }
+    } else {
+      console.error('Lỗi lưu dữ liệu:', e);
+    }
+    return false;
+  }
+};
+
+// 📊 Ước tính dung lượng đang dùng của kho dữ liệu này (byte). Giới hạn trình duyệt ~5MB.
+const STORAGE_LIMIT_BYTES = 5 * 1024 * 1024;
+const getStorageUsage = () => {
+  try {
+    let total = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      const v = localStorage.getItem(k) || '';
+      total += (k.length + v.length) * 2; // UTF-16: 2 byte/ký tự
+    }
+    const appBytes = ((localStorage.getItem(STORAGE_KEY) || '').length) * 2;
+    return { totalBytes: total, appBytes, limitBytes: STORAGE_LIMIT_BYTES, percent: Math.min(100, Math.round(total / STORAGE_LIMIT_BYTES * 100)) };
+  } catch { return { totalBytes: 0, appBytes: 0, limitBytes: STORAGE_LIMIT_BYTES, percent: 0 }; }
+};
+const formatBytes = (b) => b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(0) + ' KB' : (b / 1048576).toFixed(2) + ' MB';
+
+// 🗜️ Nén ảnh trước khi lưu: thu nhỏ + chuyển JPEG để không làm đầy bộ nhớ (ảnh 4MB → ~200-400KB)
+const compressImageDataURL = (dataURL, maxDim = 1400, quality = 0.6) => new Promise((resolve) => {
+  try {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          const scale = maxDim / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      } catch { resolve(dataURL); }
+    };
+    img.onerror = () => resolve(dataURL);
+    img.src = dataURL;
+  } catch { resolve(dataURL); }
+});
+
+// ============== 💾 LƯU RA FILE THẬT TRÊN MÁY (File System Access API) ==============
+// Cho phép app ghi toàn bộ dữ liệu vào 1 file .json trong thư mục cô chọn trên máy này.
+// Chạy trên Chrome / Cốc Cốc / Edge khi mở qua localhost hoặc web (không chạy khi mở bằng file://).
+const FS_SUPPORTED = typeof window !== 'undefined' && 'showDirectoryPicker' in window;
+const FS_FILE_NAME = 'TroLyGiaoVien_DuLieu.json';
+let fsDirHandle = null;
+
+// -- IndexedDB nhỏ để NHỚ thư mục cô đã chọn (giữ qua các lần mở lại app) --
+const idbOpen = () => new Promise((resolve, reject) => {
+  const req = indexedDB.open('trolygv_fs', 1);
+  req.onupgradeneeded = () => req.result.createObjectStore('handles');
+  req.onsuccess = () => resolve(req.result);
+  req.onerror = () => reject(req.error);
+});
+const idbSet = async (key, val) => { const db = await idbOpen(); return new Promise((res, rej) => { const tx = db.transaction('handles', 'readwrite'); tx.objectStore('handles').put(val, key); tx.oncomplete = () => res(true); tx.onerror = () => rej(tx.error); }); };
+const idbGet = async (key) => { const db = await idbOpen(); return new Promise((res, rej) => { const tx = db.transaction('handles', 'readonly'); const r = tx.objectStore('handles').get(key); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); };
+const idbDel = async (key) => { const db = await idbOpen(); return new Promise((res) => { const tx = db.transaction('handles', 'readwrite'); tx.objectStore('handles').delete(key); tx.oncomplete = () => res(true); tx.onerror = () => res(false); }); };
+
+const fsQueryPermission = async (handle) => { try { return await handle.queryPermission({ mode: 'readwrite' }); } catch { return 'prompt'; } };
+const fsRequestPermission = async (handle) => { try { return await handle.requestPermission({ mode: 'readwrite' }); } catch { return 'denied'; } };
+
+// Chọn thư mục lưu (cần cô bấm nút — trình duyệt bắt buộc)
+const fsPickDirectory = async () => {
+  if (!FS_SUPPORTED) throw new Error('Trình duyệt này không hỗ trợ lưu ra thư mục. Hãy dùng Chrome hoặc Cốc Cốc và mở app qua nút "Mở Trợ Lý".');
+  const handle = await window.showDirectoryPicker({ id: 'trolygv', mode: 'readwrite' });
+  const perm = (await fsQueryPermission(handle)) === 'granted' ? 'granted' : await fsRequestPermission(handle);
+  if (perm !== 'granted') throw new Error('Cô chưa cho phép ghi vào thư mục.');
+  fsDirHandle = handle;
+  try { await idbSet('dataDir', handle); } catch {}
+  return handle;
+};
+
+// Khôi phục thư mục đã chọn lần trước (không hiện hộp thoại — chỉ lấy lại "địa chỉ")
+const fsRestoreDirectory = async () => {
+  try { const h = await idbGet('dataDir'); if (h) { fsDirHandle = h; return h; } } catch {}
+  return null;
+};
+const fsForget = async () => { fsDirHandle = null; try { await idbDel('dataDir'); } catch {} };
+
+// Ghi dữ liệu ra file (chỉ ghi khi đã được cấp quyền)
+const fsWriteData = async (payload) => {
+  if (!fsDirHandle) return false;
+  try {
+    if ((await fsQueryPermission(fsDirHandle)) !== 'granted') return false;
+    const fh = await fsDirHandle.getFileHandle(FS_FILE_NAME, { create: true });
+    const w = await fh.createWritable();
+    await w.write(JSON.stringify({ _meta: { app: 'TroLyGiaoVien', version: APP_VERSION, savedAt: new Date().toISOString() }, ...payload }, null, 2));
+    await w.close();
+    return true;
+  } catch (e) { console.error('Lỗi ghi file trên máy:', e); return false; }
+};
+let __fsWriteTimer = null;
+const fsWriteDataDebounced = (payload) => { if (__fsWriteTimer) clearTimeout(__fsWriteTimer); __fsWriteTimer = setTimeout(() => fsWriteData(payload), 800); };
+
+// Đọc dữ liệu từ file (nếu cần quyền sẽ xin — nên gọi từ trong sự kiện bấm nút)
+const fsReadData = async () => {
+  if (!fsDirHandle) return null;
+  try {
+    if ((await fsQueryPermission(fsDirHandle)) !== 'granted') { if ((await fsRequestPermission(fsDirHandle)) !== 'granted') return null; }
+    const fh = await fsDirHandle.getFileHandle(FS_FILE_NAME, { create: false });
+    const file = await fh.getFile();
+    const text = await file.text();
+    return JSON.parse(text);
+  } catch { return null; }
+};
+
+// ============== ⚡ CHẾ ĐỘ TỰ ĐỘNG (máy chủ nội bộ) ==============
+// Khi mở app bằng nút "▶️ Mở Trợ Lý", một máy chủ nhỏ chạy trên máy sẽ tự đọc/ghi file dữ liệu.
+// App chỉ cần gọi /api/data — không cần cô bấm gì cả.
+const SERVER_DATA_URL = '/api/data';
+let __serverMode = false;
+const isServerMode = () => __serverMode;
+
+// Nạp dữ liệu từ máy chủ (gọi lúc mở app). Trả về { available, data }.
+const serverLoadData = async () => {
+  try {
+    const r = await fetch(SERVER_DATA_URL, { method: 'GET', cache: 'no-store' });
+    if (!r.ok) return { available: false };
+    const j = await r.json();
+    __serverMode = true;
+    return { available: true, data: j.data };
+  } catch { return { available: false }; }
+};
+
+// Ghi dữ liệu ra máy chủ (tự động, có giãn cách để đỡ ghi liên tục)
+let __serverWriteTimer = null;
+const serverWriteData = (payload) => {
+  if (!__serverMode) return;
+  if (__serverWriteTimer) clearTimeout(__serverWriteTimer);
+  __serverWriteTimer = setTimeout(() => {
+    fetch(SERVER_DATA_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => {});
+  }, 600);
+};
+
+// ============== ☁️ ĐỒNG BỘ ĐÁM MÂY (Firebase) ==============
+// Dữ liệu được lưu trên máy chủ Google -> mở ở bất kỳ máy/điện thoại nào cũng thấy y nguyên.
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyD3sPLDkup2CScwuDppf6xMTXIeXcdPHa4",
+  authDomain: "tro-ly-giao-vien.firebaseapp.com",
+  projectId: "tro-ly-giao-vien",
+  storageBucket: "tro-ly-giao-vien.firebasestorage.app",
+  messagingSenderId: "265598885819",
+  appId: "1:265598885819:web:afcf8cd9be76804cd36e9e"
+};
+let fbAuth = null, fbDb = null, fbReady = false;
+const FB_CHUNK = 600000; // chia dữ liệu thành mảnh ~600KB để không vướng giới hạn 1MB/tài liệu của Firestore
+
+const initFirebase = () => {
+  try {
+    if (fbReady) return true;
+    if (!window.firebase || !firebase.initializeApp) return false;
+    if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    fbAuth = firebase.auth();
+    fbDb = firebase.firestore();
+    try { fbDb.enablePersistence({ synchronizeTabs: true }).catch(() => {}); } catch {}
+    fbReady = true;
+    return true;
+  } catch (e) { console.error('Lỗi khởi tạo Firebase:', e); return false; }
+};
+
+// Ghi payload lên Firestore: chia JSON thành nhiều mảnh trong users/{uid}/chunks
+let __fbWriteTimer = null, __fbLastJson = '';
+const fbWriteDataNow = async (uid, payload) => {
+  if (!fbReady || !uid) return false;
+  try {
+    const json = JSON.stringify(payload);
+    __fbLastJson = json;
+    const parts = [];
+    for (let i = 0; i < json.length; i += FB_CHUNK) parts.push(json.slice(i, i + FB_CHUNK));
+    const userRef = fbDb.collection('users').doc(uid);
+    const batch = fbDb.batch();
+    parts.forEach((s, i) => batch.set(userRef.collection('chunks').doc('c' + i), { s }));
+    batch.set(userRef, { chunkCount: parts.length, updatedAt: Date.now(), size: json.length });
+    await batch.commit();
+    // dọn các mảnh cũ dư (nếu lần trước nhiều mảnh hơn)
+    try {
+      const old = await userRef.collection('chunks').get();
+      const delBatch = fbDb.batch();
+      old.forEach(d => { const n = parseInt(d.id.slice(1), 10); if (n >= parts.length) delBatch.delete(d.ref); });
+      await delBatch.commit();
+    } catch {}
+    return true;
+  } catch (e) { console.error('Lỗi ghi đám mây:', e); return false; }
+};
+const fbWriteDataDebounced = (uid, payload) => {
+  if (!fbReady || !uid) return;
+  if (__fbWriteTimer) clearTimeout(__fbWriteTimer);
+  __fbWriteTimer = setTimeout(() => fbWriteDataNow(uid, payload), 900);
+};
+
+// Đọc payload từ Firestore (ghép các mảnh lại)
+const fbReadData = async (uid) => {
+  if (!fbReady || !uid) return null;
+  try {
+    const userRef = fbDb.collection('users').doc(uid);
+    const meta = await userRef.get();
+    if (!meta.exists) return null;
+    const n = (meta.data() || {}).chunkCount || 0;
+    if (!n) return null;
+    let json = '';
+    for (let i = 0; i < n; i++) {
+      const c = await userRef.collection('chunks').doc('c' + i).get();
+      json += (c.exists ? (c.data().s || '') : '');
+    }
+    if (!json) return null;
+    __fbLastJson = json;
+    return JSON.parse(json);
+  } catch (e) { console.error('Lỗi đọc đám mây:', e); return null; }
+};
 
 // Export toàn bộ dữ liệu ra file .json để chuyển sang máy khác
 const exportAllData = () => {
@@ -6711,7 +6947,9 @@ const ReceiveSubmissionsView = ({ data, setData, classes, assignments, submissio
     if (!active) { alert('Chọn bài tập trước'); return; }
     const queue = [];
     for (const f of files) {
-      const dataURL = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f); });
+      const rawURL = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f); });
+      // 🗜️ Nén ảnh để tiết kiệm bộ nhớ (ảnh gốc 2-4MB → ~200-400KB), vẫn đủ rõ để đọc & OCR
+      const dataURL = await compressImageDataURL(rawURL);
       queue.push({ file: f, dataURL, filename: f.name, matchedStudentId: autoMatchStudent(f.name), status: 'ready' });
     }
     setUploadQueue(q => [...q, ...queue]);
@@ -7291,8 +7529,174 @@ const ClassAssignmentReport = ({ data, classes, assignments, submissions, teache
   );
 };
 
+// ============== 🛟 THẺ AN TOÀN DỮ LIỆU ==============
+const DataSafetyCard = ({ onRestoreData }) => {
+  const [usage, setUsage] = useState(getStorageUsage());
+  const [lastBackup, setLastBackup] = useState(localStorage.getItem('last_backup_at') || '');
+  const [fsName, setFsName] = useState(fsDirHandle ? fsDirHandle.name : '');
+  const [fsGranted, setFsGranted] = useState(false);
+  const [fsBusy, setFsBusy] = useState(false);
+  const [serverMode, setServerMode] = useState(false);
+  const [serverFile, setServerFile] = useState('');
+  const refresh = () => setUsage(getStorageUsage());
+  useEffect(() => { const t = setInterval(refresh, 4000); return () => clearInterval(t); }, []);
+  useEffect(() => { (async () => { if (fsDirHandle) { setFsName(fsDirHandle.name); setFsGranted((await fsQueryPermission(fsDirHandle)) === 'granted'); } })(); }, []);
+  // Phát hiện chế độ tự động (máy chủ nội bộ đang chạy?)
+  useEffect(() => { fetch('/api/health', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(j => { if (j && j.ok) { setServerMode(true); setServerFile(j.file || ''); } }).catch(() => {}); }, []);
+
+  const connectFolder = async (forceNew) => {
+    setFsBusy(true);
+    try {
+      if (forceNew) await fsForget();
+      let handle = forceNew ? null : fsDirHandle;
+      if (handle) { if ((await fsRequestPermission(handle)) !== 'granted') handle = null; }
+      if (!handle) handle = await fsPickDirectory();
+      setFsName(handle.name); setFsGranted(true);
+      const fileData = await fsReadData();
+      const hasFile = fileData && fileData.items && Object.keys(fileData.items).length > 0;
+      const cur = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      const curHas = cur.items && Object.keys(cur.items).length > 0;
+      if (hasFile && (!curHas || confirm('📂 Thư mục này ĐÃ CÓ dữ liệu từ trước.\n\n• Bấm OK: TẢI dữ liệu từ thư mục vào chương trình (nên chọn nếu đây là máy/trình duyệt mới, hoặc muốn lấy lại bản đã lưu).\n• Bấm Hủy: GIỮ dữ liệu hiện tại và ghi đè lên file trong thư mục.'))) {
+        onRestoreData && onRestoreData(fileData);
+        alert('✅ Đã kết nối và TẢI dữ liệu từ thư mục "' + handle.name + '" vào chương trình.');
+      } else {
+        await fsWriteData(cur);
+        alert('✅ Đã kết nối thư mục "' + handle.name + '".\nTừ giờ mọi dữ liệu (đề thi, giáo án, lớp, điểm...) sẽ TỰ ĐỘNG lưu vào file trong thư mục này.');
+      }
+    } catch (e) {
+      if (e && e.name === 'AbortError') { /* cô bấm hủy hộp thoại */ }
+      else alert('❌ ' + (e.message || e));
+    } finally { setFsBusy(false); }
+  };
+
+  const doExport = () => {
+    if (exportAllData()) {
+      const now = new Date().toISOString();
+      localStorage.setItem('last_backup_at', now);
+      setLastBackup(now);
+    }
+  };
+
+  const pct = usage.percent;
+  const barColor = pct >= 85 ? 'bg-rose-500' : pct >= 60 ? 'bg-amber-500' : 'bg-teal-500';
+  const textColor = pct >= 85 ? 'text-rose-600' : pct >= 60 ? 'text-amber-600' : 'text-teal-700';
+  const daysSince = lastBackup ? Math.floor((Date.now() - new Date(lastBackup).getTime()) / 86400000) : null;
+  const needBackup = daysSince === null || daysSince >= 7;
+
+  return (
+    <div className="bg-white rounded-2xl p-6 mb-6 border-2 border-teal-200 shadow-sm">
+      <h2 className="text-lg font-bold text-slate-800 mb-1 flex items-center gap-2">
+        <span className="text-xl">🛟</span> An toàn dữ liệu
+      </h2>
+      <p className="text-sm text-slate-500 mb-4">Dữ liệu lưu ngay trên máy này. Hãy <strong>sao lưu ra file</strong> thường xuyên để không lo mất khi đổi máy hay xoá trình duyệt.</p>
+
+      {/* ⚡ Chế độ tự động (máy chủ nội bộ) — hiện khi mở qua nút "Mở Trợ Lý" */}
+      {serverMode && (
+        <div className="mb-5 rounded-xl border-2 border-teal-300 bg-gradient-to-br from-teal-50 to-emerald-50 p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-lg">⚡</span>
+            <h3 className="font-bold text-teal-900">Chế độ TỰ ĐỘNG đang bật ✅</h3>
+          </div>
+          <p className="text-sm text-teal-800">Mọi dữ liệu (đề thi, giáo án, học sinh, lớp, điểm...) đang được <strong>tự động lưu thẳng vào file thật trên máy</strong> — cô không cần bấm gì cả. Mở lại app là dữ liệu còn nguyên.</p>
+          {serverFile && <p className="text-[11px] text-teal-600 mt-2 break-all">📁 Lưu tại: <code className="bg-white px-1 rounded">{serverFile}</code></p>}
+          <p className="text-[11px] text-teal-600 mt-1">🛡️ Có bản dự phòng <code className="bg-white px-1 rounded">.bak</code> và ảnh chụp theo ngày trong thư mục <code className="bg-white px-1 rounded">DuLieu/</code>.</p>
+        </div>
+      )}
+
+      {/* 💾 Lưu tự động ra thư mục trên máy (cách thủ công — chỉ hiện khi CHƯA có chế độ tự động) */}
+      {!serverMode && (
+      <div className="mb-5 rounded-xl border-2 border-teal-100 bg-teal-50/50 p-4">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-lg">💾</span>
+          <h3 className="font-bold text-teal-900">Lưu ra thư mục trên máy</h3>
+        </div>
+        <p className="text-xs text-slate-600 mb-3">💡 Mẹo: mở app bằng nút <strong>"▶️ Mở Trợ Lý (lưu trên máy)"</strong> để bật <strong>chế độ tự động</strong> (khỏi bấm gì). Hoặc chọn thủ công một thư mục bên dưới — dữ liệu sẽ lưu vào file <code className="bg-white px-1 rounded">{FS_FILE_NAME}</code>.</p>
+
+        {!FS_SUPPORTED ? (
+          <div className="text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-3">
+            ⚠️ Trình duyệt hiện tại không hỗ trợ (hoặc cô đang mở app bằng cách nhấp đúp file). Hãy dùng <strong>Chrome / Cốc Cốc</strong> và mở app bằng nút <strong>"Mở Trợ Lý"</strong>.
+          </div>
+        ) : fsName && fsGranted ? (
+          <div>
+            <div className="flex items-center gap-2 text-sm bg-white border border-teal-200 rounded-lg px-3 py-2 mb-2">
+              <span className="text-teal-600">✅</span>
+              <span className="text-slate-700">Đang tự lưu vào: <strong className="text-teal-800">{fsName}</strong> / {FS_FILE_NAME}</span>
+            </div>
+            <button onClick={() => connectFolder(true)} disabled={fsBusy} className="text-xs px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50">📁 Đổi thư mục khác</button>
+          </div>
+        ) : fsName && !fsGranted ? (
+          <div>
+            <div className="text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2 mb-2">🔗 Đã chọn thư mục <strong>{fsName}</strong> từ trước — bấm nút dưới để kết nối lại (mỗi lần mở app cần bấm 1 lần).</div>
+            <button onClick={() => connectFolder(false)} disabled={fsBusy} className="px-4 py-2.5 rounded-xl font-semibold bg-gradient-to-r from-teal-600 to-teal-700 text-white hover:shadow-md flex items-center gap-2 disabled:opacity-60">
+              <Icon name="FolderOpen" size={16} /> {fsBusy ? 'Đang kết nối...' : 'Kết nối lại thư mục'}
+            </button>
+          </div>
+        ) : (
+          <button onClick={() => connectFolder(false)} disabled={fsBusy} className="px-4 py-2.5 rounded-xl font-semibold bg-gradient-to-r from-teal-600 to-teal-700 text-white hover:shadow-md flex items-center gap-2 disabled:opacity-60">
+            <Icon name="FolderOpen" size={16} /> {fsBusy ? 'Đang mở...' : 'Chọn thư mục lưu trên máy'}
+          </button>
+        )}
+      </div>
+      )}
+
+      {/* Thanh dung lượng */}
+      <div className="mb-4">
+        <div className="flex justify-between items-center mb-1.5 text-sm">
+          <span className="font-medium text-slate-700">Dung lượng đã dùng</span>
+          <span className={`font-bold ${textColor}`}>{formatBytes(usage.totalBytes)} / ~{formatBytes(usage.limitBytes)} ({pct}%)</span>
+        </div>
+        <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
+          <div className={`h-full ${barColor} transition-all duration-500`} style={{ width: pct + '%' }}></div>
+        </div>
+        {pct >= 85 && <p className="text-xs text-rose-600 mt-1.5 font-medium">⚠️ Gần đầy! Hãy sao lưu rồi xoá bớt ảnh bài cũ để có chỗ trống.</p>}
+        {pct >= 60 && pct < 85 && <p className="text-xs text-amber-600 mt-1.5">Dung lượng đang tăng — nhớ sao lưu định kỳ nhé cô 🌸</p>}
+      </div>
+
+      {/* Nút Sao lưu / Khôi phục */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <button onClick={doExport}
+          className="px-4 py-3 rounded-xl font-semibold bg-gradient-to-r from-teal-600 to-teal-700 text-white hover:shadow-md flex items-center justify-center gap-2 transition">
+          <Icon name="Download" size={18} /> Sao lưu ra file
+        </button>
+        <label className="px-4 py-3 rounded-xl font-semibold bg-white border-2 border-rose-300 text-rose-700 hover:bg-rose-50 flex items-center justify-center gap-2 cursor-pointer transition">
+          <Icon name="Upload" size={18} /> Khôi phục từ file
+          <input type="file" accept="application/json,.json" className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) importAllData(f); e.target.value = ''; }} />
+        </label>
+      </div>
+
+      {/* Nhắc sao lưu */}
+      <div className={`mt-4 rounded-xl p-3 text-sm border ${needBackup ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-teal-50 border-teal-100 text-teal-800'}`}>
+        {lastBackup
+          ? (needBackup
+              ? <span>🔔 Đã <strong>{daysSince} ngày</strong> chưa sao lưu — nên sao lưu lại để an toàn.</span>
+              : <span>✅ Lần sao lưu gần nhất: <strong>{new Date(lastBackup).toLocaleString('vi-VN')}</strong>.</span>)
+          : <span>🔔 Cô <strong>chưa sao lưu lần nào</strong>. Hãy bấm "Sao lưu ra file" để giữ một bản dự phòng an toàn.</span>}
+      </div>
+    </div>
+  );
+};
+
+// ============== ☁️ THẺ TÀI KHOẢN ĐÁM MÂY ==============
+const CloudAccountCard = ({ fbUser, onSignOut }) => {
+  if (!fbUser) return null;
+  return (
+    <div className="bg-white rounded-2xl p-6 mb-6 border-2 border-teal-200 shadow-sm">
+      <h2 className="text-lg font-bold text-slate-800 mb-1 flex items-center gap-2"><span className="text-xl">☁️</span> Tài khoản đám mây</h2>
+      <p className="text-sm text-slate-500 mb-3">Dữ liệu của cô đang được <strong>đồng bộ tự động</strong> qua tài khoản này. Đăng nhập cùng email trên máy/điện thoại khác là thấy y nguyên.</p>
+      <div className="flex items-center justify-between bg-teal-50 border border-teal-100 rounded-xl px-4 py-3">
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-teal-600">✅</span>
+          <span className="text-slate-700">Đang đăng nhập: <strong className="text-teal-800">{fbUser.email}</strong></span>
+        </div>
+        <button onClick={onSignOut} className="text-sm px-3 py-1.5 rounded-lg bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 font-medium">Đăng xuất</button>
+      </div>
+    </div>
+  );
+};
+
 // ============== SETTINGS TAB COMPONENT ==============
-const SettingsTab = ({ data, setData, setActive }) => {
+const SettingsTab = ({ data, setData, setActive, onRestoreData, fbUser, onSignOut }) => {
   const [groqApiKey, setGroqApiKey] = useState(getGroqApiKey());
   const [claudeApiKey, setClaudeApiKey] = useState(getClaudeApiKey());
   const [ollamaUrl, setOllamaUrl] = useState(getOllamaUrl());
@@ -7339,6 +7743,12 @@ const SettingsTab = ({ data, setData, setActive }) => {
         <h1 className="text-3xl font-bold text-slate-800 mb-2 font-display">⚙️ Cài đặt AI & LLM</h1>
         <p className="text-slate-600">Kết nối với Groq Cloud API hoặc Ollama local để chấm bài, sinh đề, tạo phiếu phụ huynh bằng AI</p>
       </div>
+
+      {/* ☁️ Tài khoản đám mây */}
+      <CloudAccountCard fbUser={fbUser} onSignOut={onSignOut} />
+
+      {/* 🛟 An toàn dữ liệu — đặt lên đầu cho dễ thấy */}
+      <DataSafetyCard onRestoreData={onRestoreData} />
 
       {/* API Usage Monitor */}
       <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl p-6 mb-6 border border-slate-200">
@@ -8415,6 +8825,91 @@ const HamburgerOverlay = ({ active, setActive, onChatOpen, onClose }) => {
 };
 
 // ============== APP ==============
+// ============== ☁️ MÀN HÌNH ĐĂNG NHẬP ĐÁM MÂY ==============
+const AuthScreen = () => {
+  const [mode, setMode] = useState('login'); // 'login' | 'signup'
+  const [email, setEmail] = useState('');
+  const [pass, setPass] = useState('');
+  const [pass2, setPass2] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const prettyErr = (code) => {
+    const m = {
+      'auth/invalid-email': 'Email không hợp lệ.',
+      'auth/user-not-found': 'Chưa có tài khoản này. Hãy bấm "Tạo tài khoản mới".',
+      'auth/wrong-password': 'Sai mật khẩu.',
+      'auth/invalid-credential': 'Sai email hoặc mật khẩu.',
+      'auth/email-already-in-use': 'Email này đã có tài khoản. Hãy đăng nhập.',
+      'auth/weak-password': 'Mật khẩu quá ngắn (cần ít nhất 6 ký tự).',
+      'auth/network-request-failed': 'Lỗi mạng. Kiểm tra kết nối internet.',
+    };
+    return m[code] || ('Có lỗi: ' + code);
+  };
+
+  const submit = async () => {
+    setErr('');
+    if (!email.trim() || !pass) { setErr('Cô nhập email và mật khẩu nhé.'); return; }
+    if (mode === 'signup' && pass !== pass2) { setErr('Hai ô mật khẩu chưa giống nhau.'); return; }
+    setBusy(true);
+    try {
+      if (mode === 'login') await fbAuth.signInWithEmailAndPassword(email.trim(), pass);
+      else await fbAuth.createUserWithEmailAndPassword(email.trim(), pass);
+      // onAuthStateChanged ở App sẽ tự nhận và vào chương trình
+    } catch (e) {
+      setErr(prettyErr(e.code || e.message));
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="flex items-center justify-center min-h-screen gradient-bg p-4">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-6">
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-teal-600 to-rose-500 flex items-center justify-center text-white text-3xl mb-3 shadow-lg">📖</div>
+          <h1 className="text-2xl font-bold text-slate-800 font-display">Trợ Lý Giáo Viên Ngữ Văn</h1>
+          <p className="text-slate-500 text-sm mt-1">{mode === 'login' ? 'Đăng nhập để mở dữ liệu của cô ở mọi nơi 🌸' : 'Tạo tài khoản để bắt đầu 🌸'}</p>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-xl border border-teal-100 p-6">
+          <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="vd: thinhdv1@gmail.com"
+            className="w-full px-3 py-2.5 border border-slate-200 rounded-xl mb-3 focus:border-teal-400 outline-none" autoFocus />
+
+          <label className="block text-sm font-medium text-slate-700 mb-1">Mật khẩu</label>
+          <input type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="Ít nhất 6 ký tự"
+            onKeyDown={e => { if (e.key === 'Enter' && mode === 'login') submit(); }}
+            className="w-full px-3 py-2.5 border border-slate-200 rounded-xl mb-3 focus:border-teal-400 outline-none" />
+
+          {mode === 'signup' && (
+            <>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Nhập lại mật khẩu</label>
+              <input type="password" value={pass2} onChange={e => setPass2(e.target.value)} placeholder="Gõ lại mật khẩu"
+                onKeyDown={e => { if (e.key === 'Enter') submit(); }}
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl mb-3 focus:border-teal-400 outline-none" />
+            </>
+          )}
+
+          {err && <div className="text-sm bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2 mb-3">⚠️ {err}</div>}
+
+          <button onClick={submit} disabled={busy}
+            className="w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-teal-600 to-teal-700 hover:shadow-md disabled:opacity-60 transition">
+            {busy ? 'Đang xử lý...' : (mode === 'login' ? 'Đăng nhập' : 'Tạo tài khoản')}
+          </button>
+
+          <div className="text-center mt-4 text-sm text-slate-500">
+            {mode === 'login' ? (
+              <>Chưa có tài khoản? <button onClick={() => { setMode('signup'); setErr(''); }} className="text-teal-700 font-semibold hover:underline">Tạo tài khoản mới</button></>
+            ) : (
+              <>Đã có tài khoản? <button onClick={() => { setMode('login'); setErr(''); }} className="text-teal-700 font-semibold hover:underline">Đăng nhập</button></>
+            )}
+          </div>
+        </div>
+        <p className="text-center text-[11px] text-slate-400 mt-4">Dữ liệu được đồng bộ an toàn qua tài khoản này. Đăng nhập cùng email trên máy/điện thoại khác là thấy y nguyên.</p>
+      </div>
+    </div>
+  );
+};
+
 const App = () => {
   const [active, setActive] = useState('dashboard');
   const [collapsed, setCollapsed] = useState(false);
@@ -8425,6 +8920,21 @@ const App = () => {
   const [teacherName, setTeacherName] = useState('');
   const [schoolName, setSchoolName] = useState('');
   const [showChat, setShowChat] = useState(false);
+  const [fbUser, setFbUser] = useState(null);        // ☁️ tài khoản đám mây đang đăng nhập
+  const [authReady, setAuthReady] = useState(false);  // đã kiểm tra tình trạng đăng nhập xong chưa
+  const dataLoadedRef = useRef(false); // 🛟 chốt an toàn: chỉ cho phép lưu SAU khi đã nạp xong dữ liệu cũ
+  const cloudRef = useRef(false);      // đám mây có dùng được không
+  const fbUserRef = useRef(null);      // giữ uid mới nhất cho hàm lưu
+
+  // Nạp một gói dữ liệu vào chương trình (dùng khi khôi phục từ file/đám mây)
+  const applyRestoredPayload = (payload) => {
+    if (!payload) return;
+    if (payload.items) setDataState(payload.items);
+    if (payload.selectedClass) setSelectedClass(payload.selectedClass);
+    if (payload.selectedBook) setSelectedBook(payload.selectedBook);
+    if (payload.teacherName != null) setTeacherName(payload.teacherName);
+    if (payload.schoolName != null) setSchoolName(payload.schoolName);
+  };
 
   useEffect(() => {
     const saved = loadData();
@@ -8433,13 +8943,54 @@ const App = () => {
     setSelectedBook(saved.selectedBook || 'ketnoi');
     setTeacherName(saved.teacherName || '');
     setSchoolName(saved.schoolName || '');
+    fsRestoreDirectory();
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch {}
+
+    const cloud = initFirebase();
+    cloudRef.current = cloud;
+    if (cloud) {
+      // ☁️ Đám mây là BẢN CHÍNH. Sau khi đăng nhập sẽ nạp dữ liệu từ đám mây về.
+      fbAuth.onAuthStateChanged(async (user) => {
+        fbUserRef.current = user || null;
+        setFbUser(user || null);
+        setAuthReady(true);
+        if (user) {
+          const remote = await fbReadData(user.uid);
+          if (remote && remote.items && Object.keys(remote.items).length > 0) {
+            applyRestoredPayload(remote); // đám mây có dữ liệu -> dùng bản đám mây
+          } else {
+            // đám mây trống -> đẩy dữ liệu hiện có trên máy này lên đám mây
+            fbWriteDataNow(user.uid, { items: saved.items || {}, selectedClass: saved.selectedClass || 6, selectedBook: saved.selectedBook || 'ketnoi', teacherName: saved.teacherName || '', schoolName: saved.schoolName || '' });
+          }
+        }
+      });
+    } else {
+      // Không có đám mây -> dùng máy chủ/localStorage như cũ
+      setAuthReady(true);
+      (async () => {
+        const res = await serverLoadData();
+        if (!res.available) return;
+        if (res.data && res.data.items && Object.keys(res.data.items).length > 0) {
+          applyRestoredPayload(res.data);
+        } else {
+          serverWriteData({ items: saved.items || {}, selectedClass: saved.selectedClass || 6, selectedBook: saved.selectedBook || 'ketnoi', teacherName: saved.teacherName || '', schoolName: saved.schoolName || '' });
+        }
+      })();
+    }
   }, []);
 
   useEffect(() => {
-    saveData({ items: data, selectedClass, selectedBook, teacherName, schoolName });
+    // Bỏ qua lần chạy ĐẦU TIÊN (lúc data còn rỗng, chưa nạp xong) để không ghi đè mất dữ liệu cũ
+    if (!dataLoadedRef.current) { dataLoadedRef.current = true; return; }
+    const payload = { items: data, selectedClass, selectedBook, teacherName, schoolName };
+    saveData(payload);             // lưu vào trình duyệt (nhanh, luôn có - bản cache)
+    fsWriteDataDebounced(payload);  // ghi ra file qua thư mục (nếu đã kết nối thủ công)
+    serverWriteData(payload);       // ghi ra file qua máy chủ (nếu mở bằng nút Mở Trợ Lý)
+    if (fbUserRef.current) fbWriteDataDebounced(fbUserRef.current.uid, payload); // ☁️ đồng bộ đám mây
   }, [data, selectedClass, selectedBook, teacherName, schoolName]);
 
   const setData = (d) => setDataState(d);
+  const handleSignOut = async () => { try { if (fbAuth) await fbAuth.signOut(); } catch {} };
   const activeMenu = MENU_ITEMS.find(m => m.id === active);
 
   const handleNavAndClose = (id) => {
@@ -8454,9 +9005,17 @@ const App = () => {
     if (active === 'exam') return <ExamTab data={data} setData={setData} selectedClass={selectedClass} selectedBook={selectedBook} teacherName={teacherName} schoolName={schoolName} setActive={handleNavAndClose} />;
     if (active === 'classes') return <ClassesTab data={data} setData={setData} selectedClass={selectedClass} selectedBook={selectedBook} teacherName={teacherName} schoolName={schoolName} setActive={handleNavAndClose} />;
     if (active === 'library') return <LibraryTab setActive={handleNavAndClose} />;
-    if (active === 'settings') return <SettingsTab data={data} setData={setData} setActive={handleNavAndClose} />;
+    if (active === 'settings') return <SettingsTab data={data} setData={setData} setActive={handleNavAndClose} onRestoreData={applyRestoredPayload} fbUser={fbUser} onSignOut={handleSignOut} />;
     return <PhasePlaceholder item={activeMenu} />;
   };
+
+  // ☁️ Cổng đăng nhập đám mây: nếu bật đám mây mà chưa đăng nhập -> hiện màn hình đăng nhập
+  if (cloudRef.current && !authReady) {
+    return <div className="flex items-center justify-center h-screen gradient-bg"><div className="text-center"><div className="text-4xl mb-3 animate-pulse">🌸</div><p className="text-teal-700 font-medium">Đang tải Trợ Lý Giáo Viên...</p></div></div>;
+  }
+  if (cloudRef.current && authReady && !fbUser) {
+    return <AuthScreen />;
+  }
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
