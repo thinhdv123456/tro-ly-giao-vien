@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Cổng Lớp Học · Trợ Lý Giáo Viên</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%230f766e'/><text x='32' y='44' font-size='34' text-anchor='middle' fill='white' font-family='serif' font-weight='700'>L</text></svg>" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+<style>
+  * { font-family: 'Be Vietnam Pro', sans-serif; }
+  .font-display { font-family: 'Playfair Display', serif; }
+  body { background: #fdfaf6; color: #3c2a21; margin: 0; }
+  .fade-in { animation: fade .3s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px);} to {opacity:1; transform:none;} }
+  .card { background:#fff; border:1px solid #e7dcd0; border-radius:16px; }
+  .btn-teal { background:#0f766e; color:#fff; } .btn-teal:hover { background:#0d655e; }
+  .btn-rose { background:#be185d; color:#fff; } .btn-rose:hover { background:#a4174f; }
+  input, textarea, select { font-family:'Be Vietnam Pro',sans-serif; }
+  ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#e7dcd0;border-radius:8px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+// ============== FIREBASE ==============
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyD3sPLDkup2CScwuDppf6xMTXIeXcdPHa4",
+  authDomain: "tro-ly-giao-vien.firebaseapp.com",
+  projectId: "tro-ly-giao-vien",
+  storageBucket: "tro-ly-giao-vien.firebasestorage.app",
+  messagingSenderId: "265598885819",
+  appId: "1:265598885819:web:afcf8cd9be76804cd36e9e"
+};
+if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+const auth = firebase.auth();
+const db = firebase.firestore();
+try { db.enablePersistence({ synchronizeTabs: true }).catch(() => {}); } catch {}
+const FV = firebase.firestore.FieldValue;
+
+// ============== HELPERS ==============
+const uid4 = () => Math.random().toString(36).slice(2, 8);
+const genCode = () => {
+  const c = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s = ''; for (let i = 0; i < 6; i++) s += c[Math.floor(Math.random() * c.length)];
+  return s;
+};
+const fmtTime = (sec) => {
+  if (sec < 0) sec = 0;
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+};
+const fmtDate = (ms) => ms ? new Date(ms).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '';
+const GRADE_COLOR = { 6: 'teal', 7: 'rose', 8: 'amber', 9: 'sky' };
+
+// ============== AI (dùng chung key với app chính vì cùng tên miền) ==============
+const getClaudeKey = () => (localStorage.getItem('claude_api_key') || '').trim();
+const getGroqKey = () => (localStorage.getItem('groq_api_key') || '').trim();
+const getProvider = () => localStorage.getItem('selectedAIProvider') || (getClaudeKey() ? 'claude' : (getGroqKey() ? 'groq' : ''));
+
+const callClaude = async (prompt, maxTokens = 1500) => {
+  const key = getClaudeKey();
+  if (!key) return { error: 'Chưa có Claude API Key' };
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model: 'claude-opus-4-8', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) return { error: (d.error && d.error.message) || ('HTTP ' + r.status) };
+    return { text: (d.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim() };
+  } catch (e) { return { error: e.message }; }
+};
+const callGroq = async (prompt, maxTokens = 1500) => {
+  const key = getGroqKey();
+  if (!key) return { error: 'Chưa có Groq API Key' };
+  try {
+    const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + key, 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'openai/gpt-oss-120b', messages: [{ role: 'user', content: prompt }], max_tokens: maxTokens, temperature: 0.5 })
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) return { error: (d.error && d.error.message) || ('HTTP ' + r.status) };
+    return { text: d.choices[0].message.content };
+  } catch (e) { return { error: e.message }; }
+};
+const callAI = async (prompt, maxTokens = 1500) => {
+  const p = getProvider();
+  if (p === 'claude') return callClaude(prompt, maxTokens);
+  if (p === 'groq') return callGroq(prompt, maxTokens);
+  if (getClaudeKey()) return callClaude(prompt, maxTokens);
+  if (getGroqKey()) return callGroq(prompt, maxTokens);
+  return { error: 'Chưa cấu hình AI (vào app chính ⚙️ Cài đặt AI để nhập key, cùng trình duyệt)' };
+};
+
+// ============== UI NHỎ ==============
+const Spinner = () => <div className="inline-block w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>;
+const Badge = ({ children, tone = 'teal' }) => {
+  const m = { teal: 'bg-teal-50 text-teal-700', rose: 'bg-rose-50 text-rose-700', amber: 'bg-amber-50 text-amber-700', gray: 'bg-slate-100 text-slate-600', green: 'bg-emerald-50 text-emerald-700', sky: 'bg-sky-50 text-sky-700' };
+  return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${m[tone] || m.teal}`}>{children}</span>;
+};
+
+// ============== MÀN CHỌN VAI TRÒ ==============
+const Landing = ({ onPick }) => (
+  <div className="min-h-screen flex items-center justify-center p-5" style={{ background: 'linear-gradient(160deg,#f0fdfa,#fdf2f8)' }}>
+    <div className="w-full max-w-md text-center fade-in">
+      <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-teal-600 to-rose-500 flex items-center justify-center text-white text-3xl mb-4 shadow-lg">🏫</div>
+      <h1 className="text-2xl font-bold font-display mb-1">Cổng Lớp Học</h1>
+      <p className="text-slate-500 text-sm mb-8">Giao bài · Làm bài · Chấm điểm · Trao đổi 🌸</p>
+      <div className="space-y-3">
+        <button onClick={() => onPick('teacher')} className="w-full card p-5 text-left hover:shadow-md transition flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center text-2xl">👩‍🏫</div>
+          <div><p className="font-semibold text-teal-900">Tôi là Giáo viên</p><p className="text-xs text-slate-500">Tạo lớp, giao bài, chấm điểm</p></div>
+        </button>
+        <button onClick={() => onPick('student')} className="w-full card p-5 text-left hover:shadow-md transition flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-rose-50 text-rose-700 flex items-center justify-center text-2xl">🎒</div>
+          <div><p className="font-semibold text-rose-900">Tôi là Học sinh / Phụ huynh</p><p className="text-xs text-slate-500">Vào lớp bằng mã, làm bài, xem điểm</p></div>
+        </button>
+      </div>
+      <p className="text-[11px] text-slate-400 mt-8">Dữ liệu đồng bộ đám mây an toàn · Cùng hệ thống Trợ Lý Giáo Viên</p>
+    </div>
+  </div>
+);
+
+// ============== ĐĂNG NHẬP GIÁO VIÊN ==============
+const TeacherLogin = ({ onBack }) => {
+  const [mode, setMode] = useState('login');
+  const [email, setEmail] = useState(''); const [pass, setPass] = useState('');
+  const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    setErr(''); if (!email.trim() || !pass) { setErr('Nhập email và mật khẩu.'); return; }
+    setBusy(true);
+    try {
+      if (mode === 'login') await auth.signInWithEmailAndPassword(email.trim(), pass);
+      else await auth.createUserWithEmailAndPassword(email.trim(), pass);
+    } catch (e) {
+      const m = { 'auth/invalid-credential': 'Sai email hoặc mật khẩu.', 'auth/email-already-in-use': 'Email đã có tài khoản, hãy đăng nhập.', 'auth/weak-password': 'Mật khẩu cần ≥ 6 ký tự.' };
+      setErr(m[e.code] || e.message);
+    } finally { setBusy(false); }
+  };
+  return (
+    <div className="min-h-screen flex items-center justify-center p-5" style={{ background: 'linear-gradient(160deg,#f0fdfa,#fdf2f8)' }}>
+      <div className="w-full max-w-sm fade-in">
+        <button onClick={onBack} className="text-sm text-slate-500 mb-3">← Quay lại</button>
+        <div className="card p-6">
+          <div className="text-center mb-5"><div className="text-3xl mb-2">👩‍🏫</div><h2 className="font-bold text-lg">{mode === 'login' ? 'Đăng nhập Giáo viên' : 'Tạo tài khoản Giáo viên'}</h2><p className="text-xs text-slate-500 mt-1">Dùng cùng tài khoản với app chính của cô</p></div>
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl mb-3" />
+          <input type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="Mật khẩu" onKeyDown={e => e.key === 'Enter' && submit()} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl mb-3" />
+          {err && <div className="text-sm bg-rose-50 text-rose-700 rounded-lg px-3 py-2 mb-3">⚠️ {err}</div>}
+          <button onClick={submit} disabled={busy} className="btn-teal w-full py-3 rounded-xl font-semibold disabled:opacity-60">{busy ? <Spinner /> : (mode === 'login' ? 'Đăng nhập' : 'Tạo tài khoản')}</button>
+          <p className="text-center text-sm text-slate-500 mt-3">{mode === 'login' ? <>Chưa có tài khoản? <button onClick={() => { setMode('signup'); setErr(''); }} className="text-teal-700 font-semibold">Tạo mới</button></> : <>Đã có? <button onClick={() => { setMode('login'); setErr(''); }} className="text-teal-700 font-semibold">Đăng nhập</button></>}</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ============== GIÁO VIÊN — DANH SÁCH LỚP ==============
+const TeacherHome = ({ user }) => {
+  const [classes, setClasses] = useState([]);
+  const [showNew, setShowNew] = useState(false);
+  const [openClass, setOpenClass] = useState(null);
+  useEffect(() => {
+    const un = db.collection('classes').where('teacherUid', '==', user.uid).onSnapshot(s => {
+      setClasses(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.grade - b.grade) || (a.name > b.name ? 1 : -1)));
+    });
+    return un;
+  }, [user.uid]);
+  if (openClass) return <ClassDetail cls={openClass} user={user} onBack={() => setOpenClass(null)} />;
+  const byGrade = {};
+  classes.forEach(c => { (byGrade[c.grade] = byGrade[c.grade] || []).push(c); });
+  return (
+    <div className="min-h-screen pb-24">
+      <div className="btn-teal px-5 py-4 flex items-center justify-between sticky top-0 z-10">
+        <div><p className="font-semibold">Các lớp của tôi</p><p className="text-[11px] text-teal-100">{user.email}</p></div>
+        <button onClick={() => auth.signOut()} className="text-xs bg-white/15 px-3 py-1.5 rounded-lg">Đăng xuất</button>
+      </div>
+      <div className="max-w-2xl mx-auto p-4">
+        {classes.length === 0 && <div className="card p-8 text-center text-slate-500 mt-6"><div className="text-4xl mb-2">🏫</div><p className="mb-4">Chưa có lớp nào. Tạo lớp đầu tiên để bắt đầu nhé!</p></div>}
+        {Object.keys(byGrade).sort().map(g => (
+          <div key={g} className="mb-5">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Khối {g}</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {byGrade[g].map(c => <ClassCard key={c.id} cls={c} onOpen={() => setOpenClass(c)} />)}
+            </div>
+          </div>
+        ))}
+      </div>
+      <button onClick={() => setShowNew(true)} className="btn-rose fixed bottom-6 right-6 px-5 py-3 rounded-full font-semibold shadow-lg flex items-center gap-2">＋ Tạo lớp</button>
+      {showNew && <NewClassModal user={user} onClose={() => setShowNew(false)} />}
+    </div>
+  );
+};
+const ClassCard = ({ cls, onOpen }) => {
+  const [pending, setPending] = useState(0);
+  useEffect(() => {
+    const un = db.collection('classes').doc(cls.id).collection('submissions').where('status', '==', 'submitted').onSnapshot(s => setPending(s.size));
+    return un;
+  }, [cls.id]);
+  return (
+    <button onClick={onOpen} className="card p-3 text-left hover:shadow-md transition">
+      <p className="font-bold text-lg text-teal-900">{cls.name}</p>
+      <p className="text-[11px] text-slate-500 mb-2">{(cls.students || []).length} học sinh · mã {cls.id}</p>
+      {pending > 0 ? <Badge tone="rose">{pending} chờ chấm</Badge> : <Badge tone="green">Xong ✓</Badge>}
+    </button>
+  );
+};
+const NewClassModal = ({ user, onClose }) => {
+  const [name, setName] = useState(''); const [grade, setGrade] = useState(6); const [busy, setBusy] = useState(false);
+  const create = async () => {
+    if (!name.trim()) return;
+    setBusy(true);
+    const code = genCode();
+    await db.collection('classes').doc(code).set({ teacherUid: user.uid, teacherName: user.email, name: name.trim(), grade: Number(grade), students: [], createdAt: Date.now() });
+    setBusy(false); onClose();
+  };
+  return (
+    <Modal onClose={onClose} title="Tạo lớp mới">
+      <label className="block text-sm font-medium mb-1">Tên lớp</label>
+      <input value={name} onChange={e => setName(e.target.value)} placeholder="VD: 6A, 7B..." className="w-full px-3 py-2.5 border border-slate-200 rounded-xl mb-3" />
+      <label className="block text-sm font-medium mb-1">Khối</label>
+      <select value={grade} onChange={e => setGrade(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl mb-4">
+        {[6, 7, 8, 9].map(g => <option key={g} value={g}>Khối {g}</option>)}
+      </select>
+      <button onClick={create} disabled={busy} className="btn-teal w-full py-3 rounded-xl font-semibold disabled:opacity-60">{busy ? <Spinner /> : 'Tạo lớp'}</button>
+    </Modal>
+  );
+};
+
+// ============== GIÁO VIÊN — CHI TIẾT LỚP ==============
+const ClassDetail = ({ cls, user, onBack }) => {
+  const [tab, setTab] = useState('assign');
+  const [assignments, setAssignments] = useState([]);
+  const [showNew, setShowNew] = useState(false);
+  const [openAsg, setOpenAsg] = useState(null);
+  useEffect(() => {
+    const un = db.collection('classes').doc(cls.id).collection('assignments').onSnapshot(s =>
+      setAssignments(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.createdAt - a.createdAt)));
+    return un;
+  }, [cls.id]);
+  if (openAsg) return <SubmissionsView cls={cls} asg={openAsg} onBack={() => setOpenAsg(null)} />;
+  return (
+    <div className="min-h-screen pb-24">
+      <div className="btn-teal px-5 py-4 flex items-center gap-3 sticky top-0 z-10">
+        <button onClick={onBack} className="text-xl">←</button>
+        <div className="flex-1"><p className="font-semibold">Lớp {cls.name}</p><p className="text-[11px] text-teal-100">Mã vào lớp: <b className="tracking-widest">{cls.id}</b></p></div>
+        <button onClick={() => { navigator.clipboard.writeText(cls.id); alert('Đã copy mã lớp: ' + cls.id + '\nGửi mã này cho học sinh để vào lớp.'); }} className="text-xs bg-white/15 px-3 py-1.5 rounded-lg">Copy mã</button>
+      </div>
+      <div className="flex border-b bg-white sticky top-[60px] z-10 text-sm">
+        {[['assign', '📝 Bài tập'], ['msg', '📢 Thông báo'], ['hs', '👥 Học sinh']].map(([k, l]) =>
+          <button key={k} onClick={() => setTab(k)} className={`flex-1 py-3 font-medium ${tab === k ? 'text-teal-700 border-b-2 border-teal-600' : 'text-slate-500'}`}>{l}</button>)}
+      </div>
+      <div className="max-w-2xl mx-auto p-4">
+        {tab === 'assign' && <>
+          {assignments.length === 0 && <p className="text-center text-slate-400 py-8">Chưa giao bài nào. Bấm nút bên dưới để giao bài đầu tiên.</p>}
+          {assignments.map(a => <AsgRow key={a.id} cls={cls} asg={a} onOpen={() => setOpenAsg(a)} />)}
+        </>}
+        {tab === 'msg' && <MessagesView cls={cls} sender={{ role: 'teacher', name: 'Cô ' + (cls.teacherName || '') }} />}
+        {tab === 'hs' && <StudentsView cls={cls} />}
+      </div>
+      {tab === 'assign' && <button onClick={() => setShowNew(true)} className="btn-rose fixed bottom-6 right-6 px-5 py-3 rounded-full font-semibold shadow-lg">＋ Giao bài</button>}
+      {showNew && <NewAssignmentModal cls={cls} user={user} onClose={() => setShowNew(false)} />}
+    </div>
+  );
+};
+const AsgRow = ({ cls, asg, onOpen }) => {
+  const [subs, setSubs] = useState({ total: 0, pending: 0 });
+  useEffect(() => {
+    const un = db.collection('classes').doc(cls.id).collection('submissions').where('assignmentId', '==', asg.id).onSnapshot(s => {
+      let pending = 0, done = 0; s.forEach(d => { const st = d.data().status; if (st === 'submitted') pending++; if (st === 'submitted' || st === 'released') done++; });
+      setSubs({ total: done, pending });
+    });
+    return un;
+  }, [cls.id, asg.id]);
+  const expired = asg.deadline && Date.now() > asg.deadline;
+  return (
+    <button onClick={onOpen} className="card p-4 w-full text-left mb-3 hover:shadow-md transition">
+      <div className="flex items-start justify-between gap-2">
+        <div><p className="font-semibold text-teal-900">{asg.title}</p><p className="text-xs text-slate-500 mt-0.5">⏱ {asg.durationMin} phút · Hạn {fmtDate(asg.deadline)}</p></div>
+        {expired ? <Badge tone="gray">Đã đóng</Badge> : <Badge tone="green">Đang mở</Badge>}
+      </div>
+      <div className="mt-2 flex gap-2">
+        <Badge tone="teal">{subs.total} bài nộp</Badge>
+        {subs.pending > 0 && <Badge tone="rose">{subs.pending} chờ chấm</Badge>}
+      </div>
+    </button>
+  );
+};
+const NewAssignmentModal = ({ cls, user, onClose }) => {
+  const [title, setTitle] = useState(''); const [body, setBody] = useState(''); const [dur, setDur] = useState(45);
+  const [days, setDays] = useState(1); const [busy, setBusy] = useState(false);
+  const create = async () => {
+    if (!title.trim() || !body.trim()) { alert('Nhập tiêu đề và nội dung đề.'); return; }
+    setBusy(true);
+    const deadline = Date.now() + Number(days) * 86400000;
+    await db.collection('classes').doc(cls.id).collection('assignments').add({ title: title.trim(), body: body.trim(), durationMin: Number(dur), deadline, createdAt: Date.now(), createdBy: user.uid });
+    setBusy(false); onClose();
+  };
+  return (
+    <Modal onClose={onClose} title="Giao bài tập">
+      <label className="block text-sm font-medium mb-1">Tiêu đề</label>
+      <input value={title} onChange={e => setTitle(e.target.value)} placeholder="VD: Kiểm tra 15 phút — Bài thơ Sang thu" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl mb-3" />
+      <label className="block text-sm font-medium mb-1">Nội dung đề / câu hỏi</label>
+      <textarea value={body} onChange={e => setBody(e.target.value)} rows={7} placeholder="Dán đề vào đây (ngữ liệu + câu hỏi). VD:&#10;Đọc đoạn thơ sau...&#10;Câu 1 (2đ): ...&#10;Câu 2 (3đ): ..." className="w-full px-3 py-2.5 border border-slate-200 rounded-xl mb-3 text-sm font-mono" />
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <div><label className="block text-sm font-medium mb-1">Thời gian làm (phút)</label><input type="number" value={dur} onChange={e => setDur(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl" /></div>
+        <div><label className="block text-sm font-medium mb-1">Hạn nộp (ngày tới)</label><input type="number" value={days} onChange={e => setDays(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl" /></div>
+      </div>
+      <button onClick={create} disabled={busy} className="btn-rose w-full py-3 rounded-xl font-semibold disabled:opacity-60">{busy ? <Spinner /> : 'Giao cho lớp ' + cls.name}</button>
+    </Modal>
+  );
+};
+
+// ============== GIÁO VIÊN — DANH SÁCH BÀI NỘP + CHẤM ==============
+const SubmissionsView = ({ cls, asg, onBack }) => {
+  const [subs, setSubs] = useState([]);
+  const [open, setOpen] = useState(null);
+  useEffect(() => {
+    const un = db.collection('classes').doc(cls.id).collection('submissions').where('assignmentId', '==', asg.id).onSnapshot(s =>
+      setSubs(s.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.status !== 'in_progress').sort((a, b) => (b.submittedAt || 0) - (a.submittedAt || 0))));
+    return un;
+  }, [cls.id, asg.id]);
+  if (open) return <GradeView cls={cls} asg={asg} sub={open} onBack={() => setOpen(null)} />;
+  return (
+    <div className="min-h-screen pb-10">
+      <div className="btn-teal px-5 py-4 flex items-center gap-3 sticky top-0 z-10">
+        <button onClick={onBack} className="text-xl">←</button>
+        <div><p className="font-semibold">{asg.title}</p><p className="text-[11px] text-teal-100">{subs.length} bài nộp</p></div>
+      </div>
+      <div className="max-w-2xl mx-auto p-4">
+        {subs.length === 0 && <p className="text-center text-slate-400 py-8">Chưa có bài nộp.</p>}
+        {subs.map(s => (
+          <button key={s.id} onClick={() => setOpen(s)} className="card p-4 w-full text-left mb-3 hover:shadow-md transition flex items-center justify-between">
+            <div><p className="font-semibold">{s.studentName}</p><p className="text-xs text-slate-500">Nộp {fmtDate(s.submittedAt)}</p></div>
+            <div className="text-right">
+              {s.status === 'released' ? <><Badge tone="green">Đã gửi</Badge><p className="text-lg font-bold text-teal-700 mt-1">{s.finalScore ?? '—'}</p></>
+                : (s.finalScore != null || s.autoScore != null) ? <Badge tone="amber">Đã chấm, chờ gửi</Badge>
+                : <Badge tone="rose">Chờ chấm</Badge>}
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
+const GradeView = ({ cls, asg, sub, onBack }) => {
+  const [score, setScore] = useState(sub.finalScore ?? sub.autoScore ?? '');
+  const [fb, setFb] = useState(sub.finalFeedback ?? sub.autoFeedback ?? '');
+  const [grading, setGrading] = useState(false);
+  const ref = db.collection('classes').doc(cls.id).collection('submissions').doc(sub.id);
+  const aiGrade = async () => {
+    setGrading(true);
+    const prompt = `Bạn là giáo viên Ngữ văn THCS. Hãy CHẤM bài làm của học sinh theo đề dưới đây. Trả lời bằng tiếng Việt.\n\n=== ĐỀ BÀI ===\n${asg.body}\n\n=== BÀI LÀM CỦA HỌC SINH ===\n${sub.answer || '(trống)'}\n\nYêu cầu: Cho ĐIỂM trên thang 10 và viết NHẬN XÉT ngắn gọn, cụ thể (ưu điểm + điều cần sửa), giọng động viên.\nĐỊNH DẠNG (JSON thuần, không markdown): {"diem": <số 0-10>, "nhanxet": "..."}`;
+    const r = await callAI(prompt, 1200);
+    setGrading(false);
+    if (r.error) { alert('Lỗi AI: ' + r.error); return; }
+    try {
+      const txt = r.text.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/```\s*$/, '').trim();
+      const j = JSON.parse(txt);
+      setScore(j.diem); setFb(j.nhanxet);
+      await ref.update({ autoScore: j.diem, autoFeedback: j.nhanxet, status: 'graded' });
+    } catch {
+      setFb(r.text); await ref.update({ autoFeedback: r.text, status: 'graded' });
+    }
+  };
+  const release = async (mode) => {
+    if (score === '' ) { alert('Cần có điểm trước khi gửi.'); return; }
+    await ref.update({ finalScore: Number(score), finalFeedback: fb, status: 'released', releaseMode: mode, releasedAt: Date.now() });
+    if (mode === 'all' && fb) {
+      await db.collection('classes').doc(cls.id).collection('messages').add({ fromRole: 'teacher', fromName: 'Cô', text: `📊 Kết quả bài "${asg.title}" của ${sub.studentName}: ${score}đ — ${fb}`, at: Date.now() });
+    }
+    alert(mode === 'private' ? '✅ Đã gửi RIÊNG cho ' + sub.studentName : '✅ Đã gửi cho TẤT CẢ lớp.');
+    onBack();
+  };
+  return (
+    <div className="min-h-screen pb-10">
+      <div className="btn-teal px-5 py-4 flex items-center gap-3 sticky top-0 z-10">
+        <button onClick={onBack} className="text-xl">←</button>
+        <div><p className="font-semibold">Chấm bài · {sub.studentName}</p><p className="text-[11px] text-teal-100">{asg.title}</p></div>
+      </div>
+      <div className="max-w-2xl mx-auto p-4 space-y-4">
+        <div className="card p-4"><p className="text-xs font-bold text-slate-500 uppercase mb-2">Bài làm của học sinh</p><div className="text-sm whitespace-pre-wrap">{sub.answer || <span className="text-slate-400 italic">(trống)</span>}</div>
+          {sub.images && sub.images.map((im, i) => <img key={i} src={im} className="mt-2 rounded-lg border max-w-full" alt="bài" />)}
+        </div>
+        <div className="card p-4 border-2 border-rose-200">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-bold text-rose-600 uppercase">🤖 AI chấm → cô duyệt</p>
+            <button onClick={aiGrade} disabled={grading} className="btn-rose text-sm px-3 py-1.5 rounded-lg disabled:opacity-60">{grading ? <Spinner /> : 'AI chấm nháp'}</button>
+          </div>
+          <label className="block text-sm font-medium mb-1">Điểm (thang 10)</label>
+          <input type="number" step="0.25" value={score} onChange={e => setScore(e.target.value)} className="w-32 px-3 py-2 border border-slate-200 rounded-xl mb-3" />
+          <label className="block text-sm font-medium mb-1">Nhận xét (cô sửa được)</label>
+          <textarea value={fb} onChange={e => setFb(e.target.value)} rows={5} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={() => release('private')} className="btn-teal py-3 rounded-xl font-semibold">🔒 Gửi riêng cho em</button>
+          <button onClick={() => release('all')} className="btn-rose py-3 rounded-xl font-semibold">📢 Gửi cả lớp</button>
+        </div>
+        <p className="text-xs text-slate-400 text-center">Gửi riêng: chỉ em này xem. Gửi cả lớp: mọi thành viên đều thấy.</p>
+      </div>
+    </div>
+  );
+};
+const StudentsView = ({ cls }) => (
+  <div className="card p-4">
+    <p className="text-sm text-slate-600 mb-3">Học sinh vào lớp bằng mã <b className="tracking-widest text-teal-700">{cls.id}</b> và tự nhập tên. Danh sách sẽ tự cập nhật khi các em nộp bài.</p>
+    {(cls.students || []).length === 0 ? <p className="text-slate-400 text-sm italic">Chưa có em nào tham gia.</p>
+      : <div className="flex flex-wrap gap-2">{(cls.students || []).map((s, i) => <Badge key={i} tone="teal">{s.name}</Badge>)}</div>}
+  </div>
+);
+
+// ============== THÔNG BÁO / TRÒ CHUYỆN ==============
+const MessagesView = ({ cls, sender }) => {
+  const [msgs, setMsgs] = useState([]); const [text, setText] = useState('');
+  const boxRef = useRef(null);
+  useEffect(() => {
+    const un = db.collection('classes').doc(cls.id).collection('messages').orderBy('at', 'asc').limitToLast(100).onSnapshot(s =>
+      setMsgs(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+    return un;
+  }, [cls.id]);
+  useEffect(() => { if (boxRef.current) boxRef.current.scrollTop = boxRef.current.scrollHeight; }, [msgs]);
+  const send = async () => {
+    if (!text.trim()) return;
+    await db.collection('classes').doc(cls.id).collection('messages').add({ fromRole: sender.role, fromName: sender.name, text: text.trim(), at: Date.now() });
+    setText('');
+  };
+  return (
+    <div className="card p-0 overflow-hidden flex flex-col" style={{ height: '62vh' }}>
+      <div ref={boxRef} className="flex-1 overflow-y-auto p-3 space-y-2 bg-slate-50">
+        {msgs.length === 0 && <p className="text-center text-slate-400 text-sm py-8">Chưa có tin nhắn. Gửi lời chào đầu tiên nhé 🌸</p>}
+        {msgs.map(m => {
+          const mine = m.fromRole === sender.role && m.fromName === sender.name;
+          return <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm ${m.fromRole === 'teacher' ? 'bg-teal-600 text-white' : mine ? 'bg-rose-500 text-white' : 'bg-white border'}`}>
+              {!mine && <p className="text-[10px] opacity-70 mb-0.5">{m.fromName}</p>}
+              <p className="whitespace-pre-wrap">{m.text}</p>
+              <p className="text-[9px] opacity-60 text-right mt-0.5">{fmtDate(m.at)}</p>
+            </div>
+          </div>;
+        })}
+      </div>
+      <div className="p-2 border-t flex gap-2 bg-white">
+        <input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} placeholder="Nhắn tin cho lớp..." className="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+        <button onClick={send} className="btn-teal px-4 rounded-xl">Gửi</button>
+      </div>
+    </div>
+  );
+};
+
+// ============== HỌC SINH — VÀO LỚP ==============
+const StudentJoin = ({ onBack, onJoined }) => {
+  const [code, setCode] = useState(localStorage.getItem('sv_code') || '');
+  const [name, setName] = useState(localStorage.getItem('sv_name') || '');
+  const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
+  const join = async () => {
+    setErr(''); const C = code.trim().toUpperCase();
+    if (!C || !name.trim()) { setErr('Nhập mã lớp và họ tên.'); return; }
+    setBusy(true);
+    try {
+      await auth.signInAnonymously();
+      const snap = await db.collection('classes').doc(C).get();
+      if (!snap.exists) { setErr('Không tìm thấy lớp có mã này. Kiểm tra lại mã cô cho.'); setBusy(false); return; }
+      const students = snap.data().students || [];
+      if (!students.find(s => s.name.toLowerCase() === name.trim().toLowerCase())) {
+        await db.collection('classes').doc(C).update({ students: FV.arrayUnion({ id: uid4(), name: name.trim() }) });
+      }
+      localStorage.setItem('sv_code', C); localStorage.setItem('sv_name', name.trim());
+      onJoined({ code: C, name: name.trim(), cls: { id: C, ...snap.data() } });
+    } catch (e) { setErr(e.message); }
+    setBusy(false);
+  };
+  return (
+    <div className="min-h-screen flex items-center justify-center p-5" style={{ background: 'linear-gradient(160deg,#fdf2f8,#f0fdfa)' }}>
+      <div className="w-full max-w-sm fade-in">
+        <button onClick={onBack} className="text-sm text-slate-500 mb-3">← Quay lại</button>
+        <div className="card p-6">
+          <div className="text-center mb-5"><div className="text-3xl mb-2">🎒</div><h2 className="font-bold text-lg">Vào lớp học</h2><p className="text-xs text-slate-500 mt-1">Nhập mã lớp cô cho và họ tên của em</p></div>
+          <label className="block text-sm font-medium mb-1">Mã lớp</label>
+          <input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="VD: ABC123" maxLength={8} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl mb-3 tracking-widest text-center font-bold text-lg" />
+          <label className="block text-sm font-medium mb-1">Họ và tên</label>
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="VD: Nguyễn Văn An" onKeyDown={e => e.key === 'Enter' && join()} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl mb-3" />
+          {err && <div className="text-sm bg-rose-50 text-rose-700 rounded-lg px-3 py-2 mb-3">⚠️ {err}</div>}
+          <button onClick={join} disabled={busy} className="btn-rose w-full py-3 rounded-xl font-semibold disabled:opacity-60">{busy ? <Spinner /> : 'Vào lớp'}</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ============== HỌC SINH — TRONG LỚP ==============
+const StudentHome = ({ sv, onLeave }) => {
+  const [tab, setTab] = useState('bai');
+  const [assignments, setAssignments] = useState([]);
+  const [mySubs, setMySubs] = useState({});
+  const [doing, setDoing] = useState(null);
+  useEffect(() => {
+    const un1 = db.collection('classes').doc(sv.code).collection('assignments').onSnapshot(s =>
+      setAssignments(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.createdAt - a.createdAt)));
+    const un2 = db.collection('classes').doc(sv.code).collection('submissions').where('studentAuthUid', '==', auth.currentUser.uid).onSnapshot(s => {
+      const m = {}; s.forEach(d => { m[d.data().assignmentId] = { id: d.id, ...d.data() }; }); setMySubs(m);
+    });
+    return () => { un1(); un2(); };
+  }, [sv.code]);
+  if (doing) return <DoAssignment sv={sv} asg={doing} sub={mySubs[doing.id]} onDone={() => setDoing(null)} />;
+  return (
+    <div className="min-h-screen pb-10">
+      <div className="btn-rose px-5 py-4 flex items-center justify-between sticky top-0 z-10">
+        <div><p className="font-semibold">Lớp {sv.cls.name}</p><p className="text-[11px] text-rose-100">{sv.name}</p></div>
+        <button onClick={onLeave} className="text-xs bg-white/15 px-3 py-1.5 rounded-lg">Thoát</button>
+      </div>
+      <div className="flex border-b bg-white sticky top-[60px] z-10 text-sm">
+        {[['bai', '📝 Bài tập'], ['diem', '📊 Điểm'], ['msg', '💬 Trò chuyện']].map(([k, l]) =>
+          <button key={k} onClick={() => setTab(k)} className={`flex-1 py-3 font-medium ${tab === k ? 'text-rose-700 border-b-2 border-rose-600' : 'text-slate-500'}`}>{l}</button>)}
+      </div>
+      <div className="max-w-2xl mx-auto p-4">
+        {tab === 'bai' && <>
+          {assignments.length === 0 && <p className="text-center text-slate-400 py-8">Chưa có bài tập nào.</p>}
+          {assignments.map(a => {
+            const sub = mySubs[a.id]; const expired = a.deadline && Date.now() > a.deadline;
+            const done = sub && (sub.status === 'submitted' || sub.status === 'released');
+            return <div key={a.id} className="card p-4 mb-3">
+              <div className="flex items-start justify-between gap-2">
+                <div><p className="font-semibold text-rose-900">{a.title}</p><p className="text-xs text-slate-500 mt-0.5">⏱ {a.durationMin} phút · Hạn {fmtDate(a.deadline)}</p></div>
+                {done ? <Badge tone="green">Đã nộp ✓</Badge> : expired ? <Badge tone="gray">Hết hạn</Badge> : <Badge tone="amber">Chưa làm</Badge>}
+              </div>
+              {!done && !expired && <button onClick={() => setDoing(a)} className="btn-rose w-full py-2.5 rounded-xl font-semibold mt-3">{sub && sub.status === 'in_progress' ? '⏱ Tiếp tục làm bài' : 'Bắt đầu làm bài'}</button>}
+              {done && sub.status === 'released' && <div className="mt-3 bg-teal-50 rounded-xl p-3"><p className="text-sm">Điểm: <b className="text-teal-700 text-lg">{sub.finalScore}</b>/10</p>{sub.finalFeedback && <p className="text-xs text-teal-800 mt-1">💬 {sub.finalFeedback}</p>}</div>}
+              {done && sub.status === 'submitted' && <p className="text-xs text-slate-400 mt-2 text-center">Đã nộp — chờ cô chấm 🌸</p>}
+            </div>;
+          })}
+        </>}
+        {tab === 'diem' && <>
+          {Object.values(mySubs).filter(s => s.status === 'released').length === 0 && <p className="text-center text-slate-400 py-8">Chưa có điểm nào được trả.</p>}
+          {Object.values(mySubs).filter(s => s.status === 'released').map(s => {
+            const a = assignments.find(x => x.id === s.assignmentId);
+            return <div key={s.id} className="card p-4 mb-3"><div className="flex items-center justify-between"><p className="font-semibold">{a ? a.title : 'Bài tập'}</p><p className="text-2xl font-bold text-teal-700">{s.finalScore}</p></div>{s.finalFeedback && <div className="bg-slate-50 rounded-lg p-3 mt-2 text-sm">💬 {s.finalFeedback}</div>}</div>;
+          })}
+        </>}
+        {tab === 'msg' && <MessagesView cls={sv.cls} sender={{ role: 'student', name: sv.name }} />}
+      </div>
+    </div>
+  );
+};
+
+// ============== HỌC SINH — LÀM BÀI (CÓ ĐỒNG HỒ) ==============
+const DoAssignment = ({ sv, asg, sub, onDone }) => {
+  const subId = asg.id + '_' + auth.currentUser.uid;
+  const ref = db.collection('classes').doc(sv.code).collection('submissions').doc(subId);
+  const [answer, setAnswer] = useState(sub ? (sub.answer || '') : '');
+  const [startedAt] = useState(sub && sub.startedAt ? sub.startedAt : Date.now());
+  const [remain, setRemain] = useState(0);
+  const submittedRef = useRef(false);
+  useEffect(() => {
+    if (!sub || !sub.startedAt) ref.set({ assignmentId: asg.id, studentAuthUid: auth.currentUser.uid, studentName: sv.name, answer: '', startedAt, status: 'in_progress' }, { merge: true });
+  }, []);
+  const doSubmit = async (auto) => {
+    if (submittedRef.current) return; submittedRef.current = true;
+    await ref.set({ assignmentId: asg.id, studentAuthUid: auth.currentUser.uid, studentName: sv.name, answer, startedAt, submittedAt: Date.now(), status: 'submitted' }, { merge: true });
+    alert(auto ? '⏰ Hết giờ! Bài đã tự nộp.' : '✅ Đã nộp bài. Chờ cô chấm nhé 🌸');
+    onDone();
+  };
+  useEffect(() => {
+    const tick = () => {
+      const byDur = asg.durationMin * 60 - Math.floor((Date.now() - startedAt) / 1000);
+      const byDl = asg.deadline ? Math.floor((asg.deadline - Date.now()) / 1000) : Infinity;
+      const r = Math.min(byDur, byDl);
+      setRemain(r);
+      if (r <= 0) doSubmit(true);
+    };
+    tick(); const iv = setInterval(tick, 1000); return () => clearInterval(iv);
+  }, []);
+  useEffect(() => { const t = setTimeout(() => { ref.update({ answer }).catch(() => {}); }, 800); return () => clearTimeout(t); }, [answer]);
+  const urgent = remain <= 60;
+  return (
+    <div className="min-h-screen pb-24">
+      <div className="btn-rose px-5 py-3 flex items-center gap-3 sticky top-0 z-10">
+        <div className="flex-1"><p className="font-semibold text-sm">{asg.title}</p></div>
+      </div>
+      <div className={`px-5 py-3 flex items-center justify-between sticky top-[52px] z-10 ${urgent ? 'bg-red-100 text-red-700' : 'bg-amber-50 text-amber-800'}`}>
+        <span className="text-sm">⏱ Thời gian còn lại</span>
+        <span className="text-2xl font-bold tracking-wider">{fmtTime(remain)}</span>
+      </div>
+      <div className="max-w-2xl mx-auto p-4 space-y-4">
+        <div className="card p-4"><p className="text-xs font-bold text-slate-500 uppercase mb-2">Đề bài</p><div className="text-sm whitespace-pre-wrap leading-relaxed">{asg.body}</div></div>
+        <div>
+          <p className="text-sm font-medium mb-1">Bài làm của em</p>
+          <textarea value={answer} onChange={e => setAnswer(e.target.value)} rows={12} placeholder="Gõ bài làm vào đây... (tự lưu, không lo mất)" className="w-full px-3 py-3 border border-slate-200 rounded-xl text-sm leading-relaxed" />
+          <p className="text-[11px] text-slate-400 mt-1">💾 Bài tự lưu liên tục. Hết giờ hệ thống sẽ tự nộp.</p>
+        </div>
+      </div>
+      <div className="fixed bottom-0 inset-x-0 p-3 bg-white border-t">
+        <div className="max-w-2xl mx-auto">
+          <button onClick={() => { if (confirm('Nộp bài ngay bây giờ?')) doSubmit(false); }} className="btn-rose w-full py-3 rounded-xl font-semibold">Nộp bài</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ============== MODAL CHUNG ==============
+const Modal = ({ title, children, onClose }) => (
+  <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" onClick={onClose}>
+    <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-5 fade-in max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div className="flex items-center justify-between mb-4"><h3 className="font-bold text-lg">{title}</h3><button onClick={onClose} className="w-8 h-8 rounded-full bg-slate-100 text-slate-500">✕</button></div>
+      {children}
+    </div>
+  </div>
+);
+
+// ============== APP ==============
+const App = () => {
+  const [role, setRole] = useState(null);       // null | 'teacher' | 'student'
+  const [user, setUser] = useState(null);       // teacher firebase user
+  const [ready, setReady] = useState(false);
+  const [sv, setSv] = useState(null);           // student session
+  useEffect(() => {
+    const un = auth.onAuthStateChanged(u => {
+      // GV = tài khoản có email; HS = ẩn danh (isAnonymous)
+      if (u && !u.isAnonymous) { setUser(u); if (!role) setRole('teacher'); }
+      else setUser(null);
+      setReady(true);
+    });
+    // Khôi phục phiên học sinh nếu có
+    const savedCode = localStorage.getItem('sv_code'), savedName = localStorage.getItem('sv_name');
+    if (savedCode && savedName && !role) {
+      // chỉ gợi ý, không tự vào — để tránh nhầm; đợi user chọn
+    }
+    return un;
+  }, []);
+  if (!ready) return <div className="min-h-screen flex items-center justify-center"><div className="text-center"><div className="text-4xl animate-pulse mb-2">🏫</div><p className="text-slate-500">Đang tải...</p></div></div>;
+
+  // Giáo viên đã đăng nhập
+  if (user) return <TeacherHome user={user} />;
+  // Học sinh đã vào lớp
+  if (sv) return <StudentHome sv={sv} onLeave={() => { setSv(null); setRole(null); auth.signOut(); }} />;
+  // Chọn vai trò
+  if (role === 'teacher') return <TeacherLogin onBack={() => setRole(null)} />;
+  if (role === 'student') return <StudentJoin onBack={() => setRole(null)} onJoined={setSv} />;
+  return <Landing onPick={setRole} />;
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
