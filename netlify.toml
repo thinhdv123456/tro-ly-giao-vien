@@ -4,7 +4,11 @@
 
 [build]
   publish = "dist"
-  command = "mkdir -p dist && cp TroLyGiaoVien_Phase4_REFACTORED.html dist/index.html && printf '/*    /index.html    200\\n' > dist/_redirects"
+  # Sinh index.html + _redirects: định tuyến /api/claude/message tới Netlify Function TRƯỚC, rồi mới tới trang chính.
+  command = "mkdir -p dist && cp TroLyGiaoVien_Phase4_REFACTORED.html dist/index.html && printf '/api/claude/message  /.netlify/functions/claude  200\\n/*  /index.html  200\\n' > dist/_redirects"
+
+[functions]
+  directory = "netlify/functions"
 
 [[headers]]
   for = "/*"

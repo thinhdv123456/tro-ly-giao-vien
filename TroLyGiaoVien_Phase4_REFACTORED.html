@@ -7719,7 +7719,9 @@ const SettingsTab = ({ data, setData, setActive, onRestoreData, fbUser, onSignOu
       setUseOllama(false);
     }
     localStorage.setItem('selectedAIProvider', selectedProvider);
-    alert('✅ Cài đặt AI đã được lưu!');
+    // 🔑 Nhấn nhẹ dữ liệu để kích hoạt đồng bộ -> chìa khóa AI được đẩy lên đám mây, dùng được máy khác
+    try { if (setData && data) setData({ ...data }); } catch {}
+    alert('✅ Cài đặt AI đã được lưu! (Đã đồng bộ để dùng trên mọi máy)');
   };
 
   const handleTestConnection = async () => {
@@ -8937,6 +8939,12 @@ const App = () => {
     if (payload.selectedBook) setSelectedBook(payload.selectedBook);
     if (payload.teacherName != null) setTeacherName(payload.teacherName);
     if (payload.schoolName != null) setSchoolName(payload.schoolName);
+    // 🔑 Khôi phục chìa khóa AI đã đồng bộ -> AI chạy được trên máy mới mà không phải nhập lại
+    if (payload.apiKeys) {
+      if (payload.apiKeys.groq) saveGroqApiKey(payload.apiKeys.groq);
+      if (payload.apiKeys.claude) saveClaudeApiKey(payload.apiKeys.claude);
+      if (payload.apiKeys.provider) localStorage.setItem('selectedAIProvider', payload.apiKeys.provider);
+    }
   };
 
   useEffect(() => {
@@ -8985,7 +8993,8 @@ const App = () => {
   useEffect(() => {
     // Bỏ qua lần chạy ĐẦU TIÊN (lúc data còn rỗng, chưa nạp xong) để không ghi đè mất dữ liệu cũ
     if (!dataLoadedRef.current) { dataLoadedRef.current = true; return; }
-    const payload = { items: data, selectedClass, selectedBook, teacherName, schoolName };
+    const payload = { items: data, selectedClass, selectedBook, teacherName, schoolName,
+      apiKeys: { groq: getGroqApiKey(), claude: getClaudeApiKey(), provider: localStorage.getItem('selectedAIProvider') || '' } };
     saveData(payload);             // lưu vào trình duyệt (nhanh, luôn có - bản cache)
     fsWriteDataDebounced(payload);  // ghi ra file qua thư mục (nếu đã kết nối thủ công)
     serverWriteData(payload);       // ghi ra file qua máy chủ (nếu mở bằng nút Mở Trợ Lý)
