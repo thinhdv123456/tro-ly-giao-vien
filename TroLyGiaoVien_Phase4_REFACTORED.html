@@ -2416,7 +2416,7 @@ Viết bằng tiếng Việt, rõ ràng, thực dụng — GV đọc là dùng �
   const generateQuestionsFromPassageAI = async () => {
     if (!form.passageContent) { alert('Chưa có ngữ liệu! Nhập nội dung ngữ liệu trước.'); return; }
     const apiKey = getGroqApiKey();
-    if (!apiKey) { alert('Cần cấu hình Groq API Key trong Cài đặt để dùng tính năng này.'); return; }
+    if (!getClaudeApiKey() && !getGroqApiKey() && !getUseOllama()) { alert('Cần cấu hình AI (Claude / Groq / Ollama) trong ⚙️ Cài đặt AI trước.'); return; }
     setGeneratingQsFromPassage(true);
     const grade = form.grade || 6;
     const EXAM_STRUCT = {
@@ -2482,7 +2482,7 @@ YÊU CẦU:
   const [generatingFullExam, setGeneratingFullExam] = useState(false);
   const generateFullExamAI = async () => {
     const apiKey = getGroqApiKey();
-    if (!apiKey) { alert('Cần cấu hình Groq API Key trong Cài đặt để dùng tính năng này.'); return; }
+    if (!getClaudeApiKey() && !getGroqApiKey() && !getUseOllama()) { alert('Cần cấu hình AI (Claude / Groq / Ollama) trong ⚙️ Cài đặt AI trước.'); return; }
     setGeneratingFullExam(true);
     const grade = form.grade || 6;
     const examType = form.examType || '45p';
