@@ -3033,22 +3033,29 @@ Chú ý: Câu hỏi Đọc hiểu phải bám sát ngữ liệu. Câu Viết ph�
 
           {/* ── PREVIEW ── */}
           <div id={'exam-preview-' + form.id} className="bg-white p-8 border-t" style={{ fontFamily: 'Times New Roman, serif', display: showPreview ? 'block' : 'none' }}>
-            <div className="grid grid-cols-2 gap-4 text-sm mb-4">
-              <div><p className="font-bold">{schoolName?.toUpperCase() || 'TRƯỜNG THCS ...'}</p><p>TỔ KHXH - NHÓM NGỮ VĂN</p></div>
-              <div className="text-right"><p>NĂM HỌC 2025-2026</p><p className="italic">{LOAI_DE.find(l => l.id === form.examType)?.ten || ''}</p></div>
+            {/* Đầu đề theo MẪU BAN HÀNH (GDPT 2018): 2 cột — trái: trường + ĐỀ CHÍNH THỨC; phải: tên kỳ thi, môn, lớp, thời gian */}
+            <div className="grid grid-cols-2 gap-6 text-sm mb-4 items-start">
+              <div className="text-center">
+                <p className="font-bold uppercase">{schoolName?.toUpperCase() || 'TRƯỜNG THCS .....................'}</p>
+                <p className="text-xs">TỔ KHOA HỌC XÃ HỘI</p>
+                <p className="mt-2"><span className="font-bold border-2 border-slate-800 px-3 py-0.5 inline-block">ĐỀ CHÍNH THỨC</span></p>
+              </div>
+              <div className="text-center">
+                <p className="font-bold uppercase">{isVao10 ? 'KỲ THI TUYỂN SINH VÀO LỚP 10' : (LOAI_DE.find(l => l.id === form.examType)?.ten?.toUpperCase() || 'ĐỀ KIỂM TRA')}</p>
+                <p>NĂM HỌC 2025 - 2026</p>
+                <p className="font-bold mt-0.5 uppercase">Môn: Ngữ văn{isVao10 ? '' : ` - Lớp ${form.grade}`}</p>
+                <p className="italic mt-0.5">Thời gian làm bài: {form.duration} phút</p>
+                <p className="italic text-xs">(không kể thời gian phát đề)</p>
+              </div>
             </div>
-            <div className="text-center mb-6">
-              <h1 className="text-xl font-bold uppercase">{isVao10 ? 'ĐỀ THI VÀO LỚP 10 MÔN NGỮ VĂN' : `ĐỀ KIỂM TRA MÔN NGỮ VĂN - LỚP ${form.grade}`}</h1>
-              {form.title && <p className="font-semibold mt-1">{form.title}</p>}
-              <p className="text-sm italic mt-1">Thời gian: {form.duration} phút (không kể thời gian giao đề)</p>
-              {isVao10 && <p className="text-sm italic">Tổng điểm: 10.0 — Phần I: 3.0đ / Phần II: 7.0đ</p>}
-            </div>
+            {form.title && <p className="text-center italic text-sm mb-2">{form.title}</p>}
+            <hr className="border-t-2 border-slate-800 mb-4" />
             {previewMode === 'de' ? (
               isVao10 ? renderVao10Preview() : (
                 <div className="space-y-3 text-sm">
                   {form.passageContent && (
                     <div className="border p-3 bg-slate-50 rounded">
-                      <p className="font-bold italic">📖 Đọc văn bản sau và thực hiện các yêu cầu bên dưới:</p>
+                      <p className="font-bold italic">Đọc {form.passageGenre === 'thong_tin' ? 'văn bản' : 'đoạn trích'} sau và thực hiện các yêu cầu:</p>
                       {form.passageTitle && <p className="font-semibold mt-2 text-center">{form.passageTitle}</p>}
                       <p style={{whiteSpace:'pre-wrap'}} className="mt-2">{form.passageContent}</p>
                       {form.passageAuthor && <p className="text-right text-xs text-slate-500 mt-2 italic">— {form.passageAuthor}</p>}
@@ -3088,13 +3095,13 @@ Chú ý: Câu hỏi Đọc hiểu phải bám sát ngữ liệu. Câu Viết ph�
                       <div>
                         {dhQs.length > 0 && (
                           <div className="mt-4">
-                            <h3 className="font-bold text-base uppercase border-b pb-1">PHẦN I: ĐỌC HIỂU ({dhQs.reduce((s,q)=>s+(q.score||0),0).toFixed(1)} điểm)</h3>
+                            <h3 className="font-bold text-base uppercase">PHẦN I. ĐỌC HIỂU ({dhQs.reduce((s,q)=>s+(q.score||0),0).toFixed(1)} điểm)</h3>
                             {dhQs.map((q, qi) => renderQ(q, qi))}
                           </div>
                         )}
                         {vietQs.length > 0 && (
                           <div className="mt-4">
-                            <h3 className="font-bold text-base uppercase border-b pb-1">PHẦN II: VIẾT ({vietQs.reduce((s,q)=>s+(q.score||0),0).toFixed(1)} điểm)</h3>
+                            <h3 className="font-bold text-base uppercase">PHẦN II. VIẾT ({vietQs.reduce((s,q)=>s+(q.score||0),0).toFixed(1)} điểm)</h3>
                             {vietQs.map((q, qi) => renderQ(q, qi))}
                           </div>
                         )}
