@@ -1128,7 +1128,7 @@ const getGroqApiKey = () => (localStorage.getItem('groq_api_key') || '').trim();
 const saveGroqApiKey = (key) => localStorage.setItem('groq_api_key', (key || '').trim());
 const getClaudeApiKey = () => (localStorage.getItem('claude_api_key') || '').trim();
 const saveClaudeApiKey = (key) => localStorage.setItem('claude_api_key', (key || '').trim());
-const CLAUDE_MODEL = 'claude-opus-5'; // model Claude cho tác vụ nặng
+const CLAUDE_MODEL = 'claude-opus-4-8'; // model Claude cho tác vụ nặng
 const getOllamaUrl = () => localStorage.getItem('ollama_url') || 'http://localhost:11434';
 const saveOllamaUrl = (url) => localStorage.setItem('ollama_url', url);
 const getUseOllama = () => localStorage.getItem('use_ollama') === 'true';
@@ -7774,7 +7774,7 @@ const SettingsTab = ({ data, setData, setActive, onRestoreData, fbUser, onSignOu
               </div>
               <div className="flex justify-between">
                 <span>📝 Mô hình:</span>
-                <span className="font-mono">claude-opus-5</span>
+                <span className="font-mono">claude-opus-4-8</span>
               </div>
               <div className="flex justify-between">
                 <span>💬 Input price:</span>
@@ -7876,7 +7876,7 @@ const SettingsTab = ({ data, setData, setActive, onRestoreData, fbUser, onSignOu
               </p>
             </div>
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-900">
-              <p className="font-semibold mb-1">⭐ Model: Claude Opus 5</p>
+              <p className="font-semibold mb-1">⭐ Model: Claude Opus 4.8</p>
               <p>Chất lượng cao nhất, hiểu tiếng Việt tuyệt vời, tạo kế hoạch chi tiết</p>
             </div>
           </div>
