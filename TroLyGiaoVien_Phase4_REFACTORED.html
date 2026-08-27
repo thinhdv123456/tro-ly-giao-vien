@@ -1225,33 +1225,41 @@ const callOllamaAPI = async (prompt, maxTokens = 500) => {
 };
 
 // ============== CLAUDE API ==============
+// Gọi THẲNG Anthropic từ trình duyệt (header 'anthropic-dangerous-direct-browser-access').
+// Ưu điểm: không qua máy chủ trung gian -> KHÔNG bị giới hạn 10 giây, chạy trên mọi máy.
 const callClaudeAPI = async (prompt, maxTokens = 1024) => {
   const apiKey = getClaudeApiKey();
   if (!apiKey) return { error: '❌ Chưa nhập Claude API Key' };
 
   try {
-    // Call local server proxy endpoint instead of calling Anthropic directly (to avoid CORS)
-    const response = await fetch('/api/claude/message', {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'content-type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify({
-        prompt: prompt,
-        maxTokens: maxTokens,
-        apiKey: apiKey,
-        model: CLAUDE_MODEL
+        model: CLAUDE_MODEL,
+        max_tokens: maxTokens,
+        messages: [{ role: 'user', content: prompt }]
       })
     });
 
+    const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      return { error: `❌ Claude API lỗi: ${errData.error || 'Không xác định'}` };
+      const msg = (data && data.error && data.error.message) || ('HTTP ' + response.status);
+      return { error: `❌ Claude API lỗi: ${msg}` };
     }
-    const data = await response.json();
-    return { success: true, text: data.text };
+    const text = (data.content || [])
+      .filter(b => b.type === 'text')
+      .map(b => b.text)
+      .join('')
+      .trim();
+    return { success: true, text: text || '(Claude không trả về nội dung)' };
   } catch (e) {
-    return { error: `❌ Lỗi: ${e.message}` };
+    return { error: `❌ Lỗi kết nối Claude: ${e.message}` };
   }
 };
 
