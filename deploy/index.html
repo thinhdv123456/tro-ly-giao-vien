@@ -1122,7 +1122,7 @@ const exportToWord = (elementId, filename) => {
 
 // ============== GROQ + OLLAMA API INTEGRATION ==============
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
+const GROQ_MODEL = 'openai/gpt-oss-120b';
 
 const getGroqApiKey = () => (localStorage.getItem('groq_api_key') || '').trim();
 const saveGroqApiKey = (key) => localStorage.setItem('groq_api_key', (key || '').trim());
@@ -1135,8 +1135,15 @@ const getUseOllama = () => localStorage.getItem('use_ollama') === 'true';
 const setUseOllama = (val) => localStorage.setItem('use_ollama', val ? 'true' : 'false');
 
 const callGroqAPI = async (prompt, maxTokens = 500) => {
+  // 🔀 Tôn trọng NGUỒN AI cô đã chọn trong Cài đặt:
+  //   - Chọn Claude  -> dùng Claude (chất lượng cao, chạy trên web qua cửa Netlify)
+  //   - Chọn Ollama  -> dùng Ollama
+  //   - Còn lại      -> dùng Groq (bên dưới)
+  const provider = localStorage.getItem('selectedAIProvider') || '';
+  if (provider === 'claude' && getClaudeApiKey()) return callClaudeAPI(prompt, maxTokens);
+
   const useOllama = getUseOllama();
-  if (useOllama) return callOllamaAPI(prompt, maxTokens);
+  if (provider === 'ollama' || useOllama) return callOllamaAPI(prompt, maxTokens);
 
   const apiKey = getGroqApiKey();
   if (!apiKey) return { error: '❌ Chưa nhập Groq API Key' };
@@ -7807,7 +7814,7 @@ const SettingsTab = ({ data, setData, setActive, onRestoreData, fbUser, onSignOu
               </div>
               <div className="flex justify-between">
                 <span>📝 Mô hình:</span>
-                <span className="font-mono">llama-3.3-70b-versatile</span>
+                <span className="font-mono">openai/gpt-oss-120b</span>
               </div>
               <div className="flex justify-between">
                 <span>⚡ Tốc độ:</span>
@@ -7913,7 +7920,7 @@ const SettingsTab = ({ data, setData, setActive, onRestoreData, fbUser, onSignOu
               </div>
             </div>
             <div className="bg-teal-50 border border-teal-200 rounded-lg p-3 text-sm text-teal-800">
-              <p className="font-semibold mb-1">✅ Model: Llama 3.3 70B Versatile</p>
+              <p className="font-semibold mb-1">✅ Model: GPT-OSS 120B (Groq)</p>
               <p>Nhanh, hiệu quả, hỗ trợ tiếng Việt tốt</p>
             </div>
           </div>
