@@ -467,19 +467,36 @@ const StudentJoin = ({ onBack, onJoined }) => {
   const join = async () => {
     setErr(''); const C = code.trim().toUpperCase();
     if (!C || !name.trim()) { setErr('Nhập mã lớp và họ tên.'); return; }
+    // Chặn treo vô hạn: mọi bước mạng chỉ chờ tối đa 12 giây rồi báo lỗi rõ ràng.
+    const withTimeout = (p, s, label) => Promise.race([
+      p, new Promise((_, rej) => setTimeout(() => rej(new Error('__TIMEOUT__' + label)), s * 1000))
+    ]);
     setBusy(true);
     try {
-      await auth.signInAnonymously();
-      const snap = await db.collection('classes').doc(C).get();
-      if (!snap.exists) { setErr('Không tìm thấy lớp có mã này. Kiểm tra lại mã cô cho.'); setBusy(false); return; }
+      await withTimeout(auth.signInAnonymously(), 12, 'dangnhap');
+      const snap = await withTimeout(db.collection('classes').doc(C).get(), 12, 'doclop');
+      if (!snap.exists) { setErr('Không tìm thấy lớp có mã "' + C + '". Kiểm tra lại mã cô cho (viết hoa, đủ ký tự).'); return; }
       const students = snap.data().students || [];
-      if (!students.find(s => s.name.toLowerCase() === name.trim().toLowerCase())) {
-        await db.collection('classes').doc(C).update({ students: FV.arrayUnion({ id: uid4(), name: name.trim() }) });
+      // Thêm tên vào sổ lớp — nếu bước này lỗi/chậm cũng KHÔNG chặn em vào lớp.
+      if (!students.find(s => s.name && s.name.toLowerCase() === name.trim().toLowerCase())) {
+        try {
+          await withTimeout(db.collection('classes').doc(C).update({ students: FV.arrayUnion({ id: uid4(), name: name.trim() }) }), 12, 'ghiten');
+        } catch (e2) { /* ghi tên thất bại vẫn cho vào lớp; cô vẫn nhận được bài nộp */ }
       }
       localStorage.setItem('sv_code', C); localStorage.setItem('sv_name', name.trim());
       onJoined({ code: C, name: name.trim(), cls: { id: C, ...snap.data() } });
-    } catch (e) { setErr(e.message); }
-    setBusy(false);
+    } catch (e) {
+      const m = e && e.message ? e.message : String(e);
+      if (m.indexOf('__TIMEOUT__') === 0) {
+        setErr('Mạng đang chậm hoặc chập chờn. Em kiểm tra wifi/4G rồi bấm "Vào lớp" lại nhé.');
+      } else if (m.indexOf('admin-restricted') >= 0 || (e && e.code === 'auth/admin-restricted-operation')) {
+        setErr('Lớp chưa mở đăng nhập cho học sinh. Nhờ cô bật "Anonymous" trong Firebase rồi thử lại.');
+      } else if (e && e.code === 'permission-denied') {
+        setErr('Không có quyền vào lớp. Nhờ cô kiểm tra lại "Quy tắc" (Rules) của Firebase.');
+      } else {
+        setErr('Không vào được lớp: ' + m);
+      }
+    } finally { setBusy(false); }
   };
   return (
     <div className="min-h-screen flex items-center justify-center p-5" style={{ background: 'linear-gradient(160deg,#fdf2f8,#f0fdfa)' }}>
@@ -508,10 +525,11 @@ const StudentHome = ({ sv, onLeave }) => {
   const [doing, setDoing] = useState(null);
   useEffect(() => {
     const un1 = db.collection('classes').doc(sv.code).collection('assignments').onSnapshot(s =>
-      setAssignments(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.createdAt - a.createdAt)));
+      setAssignments(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.createdAt - a.createdAt)),
+      err => console.warn('assignments listener:', err && err.code));
     const un2 = db.collection('classes').doc(sv.code).collection('submissions').where('studentAuthUid', '==', auth.currentUser.uid).onSnapshot(s => {
       const m = {}; s.forEach(d => { m[d.data().assignmentId] = { id: d.id, ...d.data() }; }); setMySubs(m);
-    });
+    }, err => console.warn('submissions listener:', err && err.code));
     return () => { un1(); un2(); };
   }, [sv.code]);
   if (doing) return <DoAssignment sv={sv} asg={doing} sub={mySubs[doing.id]} onDone={() => setDoing(null)} />;
@@ -633,12 +651,14 @@ const App = () => {
       else setUser(null);
       setReady(true);
     });
+    // Phòng khi Firebase khởi động chậm/kẹt: sau 4 giây vẫn hiện màn hình vào lớp (không treo).
+    const fallback = setTimeout(() => setReady(true), 4000);
     // Khôi phục phiên học sinh nếu có
     const savedCode = localStorage.getItem('sv_code'), savedName = localStorage.getItem('sv_name');
     if (savedCode && savedName && !role) {
       // chỉ gợi ý, không tự vào — để tránh nhầm; đợi user chọn
     }
-    return un;
+    return () => { un(); clearTimeout(fallback); };
   }, []);
   // Cho phép giáo viên mở phần GV bằng ?gv (chủ yếu để thử); mặc định là app HỌC SINH / PHỤ HUYNH
   const teacherMode = new URLSearchParams(location.search).has('gv');
