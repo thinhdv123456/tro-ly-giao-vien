@@ -789,6 +789,7 @@ const MENU_ITEMS = [
   { id: 'lesson', label: 'Soạn bài', icon: 'BookOpen', phase: 1 },
   { id: 'exam', label: 'Đánh giá - Kiểm tra', icon: 'FileCheck', phase: 2 },
   { id: 'classes', label: 'Quản lý các lớp học', icon: 'Users', phase: 4 },
+  { id: 'online', label: '🌐 Lớp Học Online', icon: 'Cloud', phase: 5 },
   { id: 'library', label: '📚 Thư Viện', icon: 'BookMarked', phase: 4 },
   { id: 'settings', label: '⚙️ Cài đặt AI', icon: 'Settings', phase: 4 },
   { id: 'admin', label: 'Công việc hành chính', icon: 'FolderKanban', phase: 5 },
@@ -8944,6 +8945,195 @@ const AuthScreen = () => {
   );
 };
 
+// ============== 🌐 MODULE LỚP HỌC ONLINE (phía giáo viên) ==============
+const ocGenCode = () => { const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<6;i++) s+=c[Math.floor(Math.random()*c.length)]; return s; };
+const ocFmt = (ms) => ms ? new Date(ms).toLocaleString('vi-VN',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'}) : '';
+const ocExamToText = (ex) => {
+  let s='';
+  if (ex.passageContent) { if (ex.passageTitle) s+=ex.passageTitle+'\n'; s+=ex.passageContent+'\n'; if (ex.passageAuthor) s+='— '+ex.passageAuthor+'\n'; s+='\n'; }
+  if (ex.questionText) s+=ex.questionText;
+  else if (ex.questions && ex.questions.length) s+=ex.questions.map((q,i)=>`Câu ${q.index||i+1} (${q.score||0}đ): ${q.content||''}`).join('\n');
+  return s.trim() || ex.title || '';
+};
+const OcModal = ({ title, children, onClose }) => (
+  <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+    <div className="bg-white w-full max-w-lg rounded-2xl p-5 max-h-[90vh] overflow-y-auto" onClick={e=>e.stopPropagation()}>
+      <div className="flex items-center justify-between mb-4"><h3 className="font-bold text-lg">{title}</h3><button onClick={onClose} className="w-8 h-8 rounded-full bg-slate-100">✕</button></div>
+      {children}
+    </div>
+  </div>
+);
+const OnlineClassTab = ({ fbUser, data, setActive }) => {
+  const [classes, setClasses] = useState([]);
+  const [showNew, setShowNew] = useState(false);
+  const [open, setOpen] = useState(null);
+  useEffect(() => {
+    if (!fbReady || !fbUser) return;
+    const un = fbDb.collection('classes').where('teacherUid','==',fbUser.uid).onSnapshot(s =>
+      setClasses(s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.grade-b.grade)||(a.name>b.name?1:-1))));
+    return un;
+  }, [fbUser]);
+  if (!fbUser) return <div className="fade-in max-w-xl mx-auto p-6"><div className="soft-card p-8 text-center"><div className="text-4xl mb-3">☁️</div><p className="text-slate-600 mb-2">Cần đăng nhập đám mây để dùng Lớp Học Online.</p><button onClick={()=>setActive('settings')} className="btn-primary mt-2">Vào Cài đặt / Đăng nhập</button></div></div>;
+  if (open) return <OcClassDetail cls={open} fbUser={fbUser} data={data} onBack={()=>setOpen(null)} />;
+  const byGrade = {}; classes.forEach(c=>{(byGrade[c.grade]=byGrade[c.grade]||[]).push(c);});
+  return (
+    <div className="fade-in max-w-4xl mx-auto">
+      <Breadcrumb onHome={()=>setActive('dashboard')} items={[{label:'Lớp Học Online', icon:'Cloud'}]} />
+      <div className="cream-card p-6 mb-5 flex items-center justify-between flex-wrap gap-3">
+        <div><h1 className="text-2xl font-bold font-display">🌐 Lớp Học Online</h1><p className="text-slate-600 text-sm mt-1">Tạo lớp · giao đề · nhận bài · AI chấm · gửi điểm cho học sinh 🌸</p></div>
+        <button onClick={()=>setShowNew(true)} className="btn-primary flex items-center gap-2"><Icon name="Plus" size={18}/> Tạo lớp</button>
+      </div>
+      <div className="bg-teal-50 border border-teal-100 rounded-xl p-3 text-sm text-teal-800 mb-5">💡 Học sinh/phụ huynh vào lớp tại <b>trolygiaovien.netlify.app/cong</b> bằng <b>mã lớp</b> cô tạo bên dưới.</div>
+      {classes.length === 0 && <div className="soft-card p-8 text-center text-slate-500"><div className="text-4xl mb-2">🏫</div><p>Chưa có lớp nào. Bấm "Tạo lớp" để bắt đầu.</p></div>}
+      {Object.keys(byGrade).sort().map(g=>(
+        <div key={g} className="mb-5">
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Khối {g}</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{byGrade[g].map(c=><OcClassCard key={c.id} cls={c} onOpen={()=>setOpen(c)} />)}</div>
+        </div>
+      ))}
+      {showNew && <OcNewClass fbUser={fbUser} onClose={()=>setShowNew(false)} />}
+    </div>
+  );
+};
+const OcClassCard = ({ cls, onOpen }) => {
+  const [pending, setPending] = useState(0);
+  useEffect(()=>{ const un=fbDb.collection('classes').doc(cls.id).collection('submissions').where('status','==','submitted').onSnapshot(s=>setPending(s.size)); return un; },[cls.id]);
+  return <button onClick={onOpen} className="soft-card p-3 text-left card-hover">
+    <p className="font-bold text-lg text-teal-900">{cls.name}</p>
+    <p className="text-[11px] text-slate-500 mb-2">{(cls.students||[]).length} HS · mã <b>{cls.id}</b></p>
+    {pending>0 ? <span className="pill bg-rose-50 text-rose-700 text-xs">{pending} chờ chấm</span> : <span className="pill bg-emerald-50 text-emerald-700 text-xs">Xong ✓</span>}
+  </button>;
+};
+const OcNewClass = ({ fbUser, onClose }) => {
+  const [name,setName]=useState(''); const [grade,setGrade]=useState(6); const [busy,setBusy]=useState(false);
+  const create = async () => { if(!name.trim())return; setBusy(true); const code=ocGenCode();
+    await fbDb.collection('classes').doc(code).set({ teacherUid:fbUser.uid, teacherName:fbUser.email, name:name.trim(), grade:Number(grade), students:[], createdAt:Date.now() });
+    setBusy(false); onClose(); };
+  return <OcModal title="Tạo lớp mới" onClose={onClose}>
+    <label className="block text-sm font-medium mb-1">Tên lớp</label>
+    <input value={name} onChange={e=>setName(e.target.value)} placeholder="VD: 6A, 7B..." className="w-full px-3 py-2.5 border rounded-xl mb-3" />
+    <label className="block text-sm font-medium mb-1">Khối</label>
+    <select value={grade} onChange={e=>setGrade(e.target.value)} className="w-full px-3 py-2.5 border rounded-xl mb-4">{[6,7,8,9].map(g=><option key={g} value={g}>Khối {g}</option>)}</select>
+    <button onClick={create} disabled={busy} className="btn-primary w-full">{busy?'Đang tạo...':'Tạo lớp'}</button>
+  </OcModal>;
+};
+const OcClassDetail = ({ cls, fbUser, data, onBack }) => {
+  const [tab,setTab]=useState('asg'); const [asgs,setAsgs]=useState([]); const [showNew,setShowNew]=useState(false); const [openAsg,setOpenAsg]=useState(null);
+  useEffect(()=>{ const un=fbDb.collection('classes').doc(cls.id).collection('assignments').onSnapshot(s=>setAsgs(s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>b.createdAt-a.createdAt))); return un; },[cls.id]);
+  if (openAsg) return <OcSubmissions cls={cls} asg={openAsg} onBack={()=>setOpenAsg(null)} />;
+  return <div className="fade-in max-w-3xl mx-auto">
+    <div className="flex items-center gap-3 mb-4">
+      <button onClick={onBack} className="text-teal-700 text-sm">← Danh sách lớp</button>
+      <div className="flex-1"></div>
+      <div className="text-sm">Mã lớp: <b className="tracking-widest text-teal-700">{cls.id}</b></div>
+      <button onClick={()=>{navigator.clipboard.writeText(cls.id);alert('Đã copy mã lớp: '+cls.id);}} className="text-xs px-3 py-1.5 bg-slate-100 rounded-lg">Copy</button>
+    </div>
+    <h2 className="text-xl font-bold mb-3">Lớp {cls.name}</h2>
+    <div className="flex gap-2 mb-4">
+      {[['asg','📝 Bài tập'],['msg','📢 Thông báo'],['hs','👥 Học sinh']].map(([k,l])=><button key={k} onClick={()=>setTab(k)} className={`tab-chip ${tab===k?'active':''}`}>{l}</button>)}
+    </div>
+    {tab==='asg' && <>
+      <button onClick={()=>setShowNew(true)} className="btn-accent mb-4 flex items-center gap-2"><Icon name="Plus" size={16}/> Giao bài</button>
+      {asgs.length===0 && <p className="text-slate-400 text-center py-6">Chưa giao bài nào.</p>}
+      {asgs.map(a=><OcAsgRow key={a.id} cls={cls} asg={a} onOpen={()=>setOpenAsg(a)} />)}
+    </>}
+    {tab==='msg' && <OcMessages cls={cls} />}
+    {tab==='hs' && <div className="soft-card p-4"><p className="text-sm text-slate-600 mb-2">Học sinh vào bằng mã <b>{cls.id}</b> và tự nhập tên.</p>{(cls.students||[]).length===0?<p className="text-slate-400 text-sm italic">Chưa có HS.</p>:<div className="flex flex-wrap gap-2">{(cls.students||[]).map((s,i)=><span key={i} className="pill bg-teal-50 text-teal-700 text-xs">{s.name}</span>)}</div>}</div>}
+    {showNew && <OcNewAsg cls={cls} fbUser={fbUser} data={data} onClose={()=>setShowNew(false)} />}
+  </div>;
+};
+const OcAsgRow = ({ cls, asg, onOpen }) => {
+  const [st,setSt]=useState({total:0,pending:0});
+  useEffect(()=>{ const un=fbDb.collection('classes').doc(cls.id).collection('submissions').where('assignmentId','==',asg.id).onSnapshot(s=>{let p=0,d=0;s.forEach(x=>{const t=x.data().status;if(t==='submitted')p++;if(t==='submitted'||t==='released')d++;});setSt({total:d,pending:p});}); return un; },[cls.id,asg.id]);
+  const expired = asg.deadline && Date.now()>asg.deadline;
+  return <button onClick={onOpen} className="soft-card p-4 w-full text-left mb-3 card-hover">
+    <div className="flex items-start justify-between gap-2"><div><p className="font-semibold text-teal-900">{asg.title}</p><p className="text-xs text-slate-500 mt-0.5">⏱ {asg.durationMin} phút · Hạn {ocFmt(asg.deadline)}</p></div>{expired?<span className="pill bg-slate-100 text-slate-500 text-xs">Đã đóng</span>:<span className="pill bg-emerald-50 text-emerald-700 text-xs">Đang mở</span>}</div>
+    <div className="mt-2 flex gap-2"><span className="pill bg-teal-50 text-teal-700 text-xs">{st.total} nộp</span>{st.pending>0 && <span className="pill bg-rose-50 text-rose-700 text-xs">{st.pending} chờ chấm</span>}</div>
+  </button>;
+};
+const OcNewAsg = ({ cls, fbUser, data, onClose }) => {
+  const [title,setTitle]=useState(''); const [body,setBody]=useState(''); const [dur,setDur]=useState(45); const [days,setDays]=useState(1); const [busy,setBusy]=useState(false);
+  const exams = (data && data.exams) || [];
+  const pickExam = (id) => { const ex=exams.find(e=>String(e.id)===String(id)); if(!ex)return; setTitle(ex.title||'Đề kiểm tra'); setBody(ocExamToText(ex)); };
+  const create = async () => { if(!title.trim()||!body.trim()){alert('Cần tiêu đề và nội dung đề.');return;} setBusy(true);
+    await fbDb.collection('classes').doc(cls.id).collection('assignments').add({ title:title.trim(), body:body.trim(), durationMin:Number(dur), deadline:Date.now()+Number(days)*86400000, createdAt:Date.now(), createdBy:fbUser.uid });
+    setBusy(false); onClose(); };
+  return <OcModal title={'Giao bài cho lớp '+cls.name} onClose={onClose}>
+    {exams.length>0 && <div className="mb-3 bg-rose-50 border border-rose-100 rounded-xl p-3">
+      <label className="block text-sm font-medium mb-1 text-rose-700">📤 Lấy từ đề đã soạn (module Ra đề)</label>
+      <select onChange={e=>pickExam(e.target.value)} className="w-full px-3 py-2 border rounded-xl text-sm"><option value="">— Chọn một đề để nạp sẵn —</option>{exams.map(e=><option key={e.id} value={e.id}>{e.title||'(Đề chưa đặt tên)'}</option>)}</select>
+    </div>}
+    <label className="block text-sm font-medium mb-1">Tiêu đề</label>
+    <input value={title} onChange={e=>setTitle(e.target.value)} className="w-full px-3 py-2.5 border rounded-xl mb-3" placeholder="VD: Kiểm tra 15 phút" />
+    <label className="block text-sm font-medium mb-1">Nội dung đề</label>
+    <textarea value={body} onChange={e=>setBody(e.target.value)} rows={7} className="w-full px-3 py-2.5 border rounded-xl mb-3 text-sm font-mono" placeholder="Dán đề (ngữ liệu + câu hỏi) hoặc chọn từ đề đã soạn ở trên." />
+    <div className="grid grid-cols-2 gap-3 mb-4">
+      <div><label className="block text-sm font-medium mb-1">Thời gian (phút)</label><input type="number" value={dur} onChange={e=>setDur(e.target.value)} className="w-full px-3 py-2.5 border rounded-xl" /></div>
+      <div><label className="block text-sm font-medium mb-1">Hạn (ngày tới)</label><input type="number" value={days} onChange={e=>setDays(e.target.value)} className="w-full px-3 py-2.5 border rounded-xl" /></div>
+    </div>
+    <button onClick={create} disabled={busy} className="btn-accent w-full">{busy?'Đang giao...':'Giao cho lớp '+cls.name}</button>
+  </OcModal>;
+};
+const OcSubmissions = ({ cls, asg, onBack }) => {
+  const [subs,setSubs]=useState([]); const [open,setOpen]=useState(null);
+  useEffect(()=>{ const un=fbDb.collection('classes').doc(cls.id).collection('submissions').where('assignmentId','==',asg.id).onSnapshot(s=>setSubs(s.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.status!=='in_progress').sort((a,b)=>(b.submittedAt||0)-(a.submittedAt||0)))); return un; },[cls.id,asg.id]);
+  if (open) return <OcGrade cls={cls} asg={asg} sub={open} onBack={()=>setOpen(null)} />;
+  return <div className="fade-in max-w-3xl mx-auto">
+    <button onClick={onBack} className="text-teal-700 text-sm mb-3">← Bài tập</button>
+    <h2 className="text-xl font-bold mb-1">{asg.title}</h2><p className="text-sm text-slate-500 mb-4">{subs.length} bài nộp</p>
+    {subs.length===0 && <p className="text-slate-400 text-center py-6">Chưa có bài nộp.</p>}
+    {subs.map(s=><button key={s.id} onClick={()=>setOpen(s)} className="soft-card p-4 w-full text-left mb-3 card-hover flex items-center justify-between">
+      <div><p className="font-semibold">{s.studentName}</p><p className="text-xs text-slate-500">Nộp {ocFmt(s.submittedAt)}</p></div>
+      <div className="text-right">{s.status==='released'?<><span className="pill bg-emerald-50 text-emerald-700 text-xs">Đã gửi</span><p className="text-lg font-bold text-teal-700">{s.finalScore??'—'}</p></>:(s.autoScore!=null||s.finalScore!=null)?<span className="pill bg-amber-50 text-amber-700 text-xs">Đã chấm, chờ gửi</span>:<span className="pill bg-rose-50 text-rose-700 text-xs">Chờ chấm</span>}</div>
+    </button>)}
+  </div>;
+};
+const OcGrade = ({ cls, asg, sub, onBack }) => {
+  const [score,setScore]=useState(sub.finalScore??sub.autoScore??''); const [fb,setFb]=useState(sub.finalFeedback??sub.autoFeedback??''); const [grading,setGrading]=useState(false);
+  const ref = fbDb.collection('classes').doc(cls.id).collection('submissions').doc(sub.id);
+  const aiGrade = async () => {
+    setGrading(true);
+    const prompt=`Bạn là giáo viên Ngữ văn THCS. Hãy CHẤM bài làm học sinh theo đề. Trả lời tiếng Việt.\n\n=== ĐỀ ===\n${asg.body}\n\n=== BÀI LÀM ===\n${sub.answer||'(trống)'}\n\nCho ĐIỂM thang 10 và NHẬN XÉT ngắn gọn cụ thể, giọng động viên.\nĐỊNH DẠNG JSON thuần (không markdown): {"diem": <số 0-10>, "nhanxet": "..."}`;
+    const r = await callGroqAPI(prompt, 1200);
+    setGrading(false);
+    if (r.error){alert('Lỗi AI: '+r.error);return;}
+    try{ const t=r.text.replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/```\s*$/,'').trim(); const j=JSON.parse(t); setScore(j.diem); setFb(j.nhanxet); await ref.update({autoScore:j.diem,autoFeedback:j.nhanxet,status:'graded'}); }
+    catch{ setFb(r.text); await ref.update({autoFeedback:r.text,status:'graded'}); }
+  };
+  const release = async (mode) => { if(score===''){alert('Cần có điểm.');return;} await ref.update({finalScore:Number(score),finalFeedback:fb,status:'released',releaseMode:mode,releasedAt:Date.now()});
+    if(mode==='all'&&fb) await fbDb.collection('classes').doc(cls.id).collection('messages').add({fromRole:'teacher',fromName:'Cô',text:`📊 Kết quả "${asg.title}" của ${sub.studentName}: ${score}đ — ${fb}`,at:Date.now()});
+    alert(mode==='private'?'✅ Đã gửi RIÊNG cho '+sub.studentName:'✅ Đã gửi cả lớp.'); onBack(); };
+  return <div className="fade-in max-w-3xl mx-auto space-y-4">
+    <button onClick={onBack} className="text-teal-700 text-sm">← Danh sách bài nộp</button>
+    <h2 className="text-xl font-bold">Chấm bài · {sub.studentName}</h2>
+    <div className="soft-card p-4"><p className="text-xs font-bold text-slate-500 uppercase mb-2">Bài làm của học sinh</p><div className="text-sm whitespace-pre-wrap">{sub.answer||<span className="text-slate-400 italic">(trống)</span>}</div>{sub.images&&sub.images.map((im,i)=><img key={i} src={im} className="mt-2 rounded-lg border max-w-full" alt="bài"/>)}</div>
+    <div className="soft-card p-4 border-2 border-rose-200">
+      <div className="flex items-center justify-between mb-2"><p className="text-xs font-bold text-rose-600 uppercase">🤖 AI chấm → cô duyệt</p><button onClick={aiGrade} disabled={grading} className="btn-accent text-sm">{grading?'Đang chấm...':'AI chấm nháp'}</button></div>
+      <label className="block text-sm font-medium mb-1">Điểm (thang 10)</label>
+      <input type="number" step="0.25" value={score} onChange={e=>setScore(e.target.value)} className="w-32 px-3 py-2 border rounded-xl mb-3" />
+      <label className="block text-sm font-medium mb-1">Nhận xét (sửa được)</label>
+      <textarea value={fb} onChange={e=>setFb(e.target.value)} rows={5} className="w-full px-3 py-2.5 border rounded-xl text-sm" />
+    </div>
+    <div className="grid grid-cols-2 gap-3">
+      <button onClick={()=>release('private')} className="btn-primary">🔒 Gửi riêng cho em</button>
+      <button onClick={()=>release('all')} className="btn-accent">📢 Gửi cả lớp</button>
+    </div>
+  </div>;
+};
+const OcMessages = ({ cls }) => {
+  const [msgs,setMsgs]=useState([]); const [text,setText]=useState(''); const boxRef=useRef(null);
+  useEffect(()=>{ const un=fbDb.collection('classes').doc(cls.id).collection('messages').orderBy('at','asc').limitToLast(100).onSnapshot(s=>setMsgs(s.docs.map(d=>({id:d.id,...d.data()})))); return un; },[cls.id]);
+  useEffect(()=>{ if(boxRef.current) boxRef.current.scrollTop=boxRef.current.scrollHeight; },[msgs]);
+  const send=async()=>{ if(!text.trim())return; await fbDb.collection('classes').doc(cls.id).collection('messages').add({fromRole:'teacher',fromName:'Cô',text:text.trim(),at:Date.now()}); setText(''); };
+  return <div className="soft-card p-0 overflow-hidden flex flex-col" style={{height:'60vh'}}>
+    <div ref={boxRef} className="flex-1 overflow-y-auto p-3 space-y-2 bg-slate-50">
+      {msgs.length===0 && <p className="text-center text-slate-400 text-sm py-8">Chưa có tin. Gửi thông báo cho lớp 🌸</p>}
+      {msgs.map(m=><div key={m.id} className={`flex ${m.fromRole==='teacher'?'justify-end':'justify-start'}`}><div className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm ${m.fromRole==='teacher'?'bg-teal-600 text-white':'bg-white border'}`}>{m.fromRole!=='teacher'&&<p className="text-[10px] opacity-70 mb-0.5">{m.fromName}</p>}<p className="whitespace-pre-wrap">{m.text}</p><p className="text-[9px] opacity-60 text-right mt-0.5">{ocFmt(m.at)}</p></div></div>)}
+    </div>
+    <div className="p-2 border-t flex gap-2 bg-white"><input value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>e.key==='Enter'&&send()} placeholder="Nhắn cho lớp..." className="flex-1 px-3 py-2 border rounded-xl text-sm" /><button onClick={send} className="btn-primary">Gửi</button></div>
+  </div>;
+};
+
 const App = () => {
   const [active, setActive] = useState('dashboard');
   const [collapsed, setCollapsed] = useState(false);
@@ -9045,6 +9235,7 @@ const App = () => {
     if (active === 'lesson') return <LessonTab data={data} setData={setData} selectedClass={selectedClass} selectedBook={selectedBook} teacherName={teacherName} schoolName={schoolName} setActive={handleNavAndClose} />;
     if (active === 'exam') return <ExamTab data={data} setData={setData} selectedClass={selectedClass} selectedBook={selectedBook} teacherName={teacherName} schoolName={schoolName} setActive={handleNavAndClose} />;
     if (active === 'classes') return <ClassesTab data={data} setData={setData} selectedClass={selectedClass} selectedBook={selectedBook} teacherName={teacherName} schoolName={schoolName} setActive={handleNavAndClose} />;
+    if (active === 'online') return <OnlineClassTab fbUser={fbUser} data={data} setActive={handleNavAndClose} />;
     if (active === 'library') return <LibraryTab setActive={handleNavAndClose} />;
     if (active === 'settings') return <SettingsTab data={data} setData={setData} setActive={handleNavAndClose} onRestoreData={applyRestoredPayload} fbUser={fbUser} onSignOut={handleSignOut} />;
     return <PhasePlaceholder item={activeMenu} />;

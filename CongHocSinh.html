@@ -484,7 +484,8 @@ const StudentJoin = ({ onBack, onJoined }) => {
   return (
     <div className="min-h-screen flex items-center justify-center p-5" style={{ background: 'linear-gradient(160deg,#fdf2f8,#f0fdfa)' }}>
       <div className="w-full max-w-sm fade-in">
-        <button onClick={onBack} className="text-sm text-slate-500 mb-3">← Quay lại</button>
+        {onBack && <button onClick={onBack} className="text-sm text-slate-500 mb-3">← Quay lại</button>}
+        <div className="text-center mb-4"><div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-rose-500 to-teal-500 flex items-center justify-center text-white text-2xl mb-2">🏫</div><h1 className="font-bold text-xl font-display">Cổng Lớp Học</h1></div>
         <div className="card p-6">
           <div className="text-center mb-5"><div className="text-3xl mb-2">🎒</div><h2 className="font-bold text-lg">Vào lớp học</h2><p className="text-xs text-slate-500 mt-1">Nhập mã lớp cô cho và họ tên của em</p></div>
           <label className="block text-sm font-medium mb-1">Mã lớp</label>
@@ -639,16 +640,17 @@ const App = () => {
     }
     return un;
   }, []);
-  if (!ready) return <div className="min-h-screen flex items-center justify-center"><div className="text-center"><div className="text-4xl animate-pulse mb-2">🏫</div><p className="text-slate-500">Đang tải...</p></div></div>;
+  // Cho phép giáo viên mở phần GV bằng ?gv (chủ yếu để thử); mặc định là app HỌC SINH / PHỤ HUYNH
+  const teacherMode = new URLSearchParams(location.search).has('gv');
+  if (!ready) return <div className="min-h-screen flex items-center justify-center"><div className="text-center"><div className="text-4xl animate-pulse mb-2">🎒</div><p className="text-slate-500">Đang tải...</p></div></div>;
 
-  // Giáo viên đã đăng nhập
-  if (user) return <TeacherHome user={user} />;
-  // Học sinh đã vào lớp
-  if (sv) return <StudentHome sv={sv} onLeave={() => { setSv(null); setRole(null); auth.signOut(); }} />;
-  // Chọn vai trò
-  if (role === 'teacher') return <TeacherLogin onBack={() => setRole(null)} />;
-  if (role === 'student') return <StudentJoin onBack={() => setRole(null)} onJoined={setSv} />;
-  return <Landing onPick={setRole} />;
+  if (teacherMode) {
+    if (user) return <TeacherHome user={user} />;
+    return <TeacherLogin onBack={() => { location.href = location.pathname; }} />;
+  }
+  // ===== APP HỌC SINH / PHỤ HUYNH =====
+  if (sv) return <StudentHome sv={sv} onLeave={() => { setSv(null); auth.signOut(); }} />;
+  return <StudentJoin onJoined={setSv} />;
 };
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
