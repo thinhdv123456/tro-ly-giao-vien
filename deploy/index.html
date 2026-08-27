@@ -1629,14 +1629,19 @@ const Header = ({ selectedClass, setSelectedClass, selectedBook, setSelectedBook
   const [aiProvider, setAiProvider] = React.useState('');
   React.useEffect(() => {
     const refresh = () => {
-      if (getUseOllama()) setAiProvider('Ollama');
+      const p = localStorage.getItem('selectedAIProvider') || '';
+      // Ưu tiên đúng NGUỒN cô đã chọn; nếu chưa chọn thì đoán theo key có sẵn
+      if (p === 'ollama' || getUseOllama()) setAiProvider('Ollama');
+      else if (p === 'groq') setAiProvider(getGroqApiKey() ? 'Groq' : '');
+      else if (p === 'claude') setAiProvider(getClaudeApiKey() ? 'Claude' : '');
       else if (getClaudeApiKey()) setAiProvider('Claude');
       else if (getGroqApiKey()) setAiProvider('Groq');
       else setAiProvider('');
     };
     refresh();
     window.addEventListener('focus', refresh);
-    return () => window.removeEventListener('focus', refresh);
+    window.addEventListener('ai-provider-changed', refresh); // đổi nguồn trong Cài đặt -> cập nhật ngay
+    return () => { window.removeEventListener('focus', refresh); window.removeEventListener('ai-provider-changed', refresh); };
   }, []);
   const providerColor = aiProvider === 'Groq' ? 'bg-amber-50 text-amber-700 border-amber-200' :
                         aiProvider === 'Claude' ? 'bg-rose-50 text-rose-700 border-rose-200' :
@@ -7736,6 +7741,8 @@ const SettingsTab = ({ data, setData, setActive, onRestoreData, fbUser, onSignOu
     localStorage.setItem('selectedAIProvider', selectedProvider);
     // 🔑 Nhấn nhẹ dữ liệu để kích hoạt đồng bộ -> chìa khóa AI được đẩy lên đám mây, dùng được máy khác
     try { if (setData && data) setData({ ...data }); } catch {}
+    // 🔔 Báo cho badge nguồn AI ở góc trên cập nhật ngay theo nguồn vừa chọn
+    try { window.dispatchEvent(new Event('ai-provider-changed')); } catch {}
     alert('✅ Cài đặt AI đã được lưu! (Đã đồng bộ để dùng trên mọi máy)');
   };
 
