@@ -238,6 +238,22 @@
   }
   @media (max-width: 767px) { .sidebar-overlay { display: block; } }
   .mobile-menu-btn { display: none; }
+
+  /* ══════ THANH TAB DƯỚI (điện thoại) — kính mờ Kem Hồng ══════ */
+  .mobile-tabbar { display: none; }
+  .mtab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 10px; background: none; border: none; padding: 6px 2px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .mtab-center { flex: 0 0 auto; }
+  .mtab-fab { width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; margin-top: -22px; border: 3px solid #fff7f4; background: linear-gradient(135deg, #be185d, #ec4899); box-shadow: 0 6px 16px -4px rgba(190,24,93,0.5); }
+  @media (max-width: 767px) {
+    .mobile-tabbar {
+      display: flex; position: fixed; bottom: 0; left: 0; right: 0; z-index: 45;
+      align-items: flex-end; justify-content: space-between;
+      background: rgba(255,255,255,0.85); backdrop-filter: blur(16px) saturate(1.4); -webkit-backdrop-filter: blur(16px) saturate(1.4);
+      border-top: 1px solid #fbcfe8; padding: 6px 8px calc(6px + env(safe-area-inset-bottom)) 8px;
+      box-shadow: 0 -6px 20px -8px rgba(190,24,93,0.15);
+    }
+    .main-content-area { padding-bottom: 88px !important; }
+  }
 </style>
 </head>
 <body class="bg-slate-50">
@@ -1681,6 +1697,39 @@ const Sidebar = ({ active, setActive, collapsed, setCollapsed, onChatOpen, mobil
     )}
   </aside>
 );
+
+// ============== THANH TAB DƯỚI (ĐIỆN THOẠI) ==============
+const MobileTabBar = ({ active, setActive, onMenu }) => {
+  const tabs = [
+    { id: 'dashboard', label: 'Tổng quan', icon: 'LayoutDashboard' },
+    { id: 'lesson', label: 'Soạn bài', icon: 'BookOpen' },
+    { id: 'online', label: 'Lớp học', icon: 'Cloud', center: true },
+    { id: 'exam', label: 'Đánh giá', icon: 'FileCheck' },
+    { id: '__menu', label: 'Menu', icon: 'Menu' },
+  ];
+  return (
+    <nav className="mobile-tabbar">
+      {tabs.map(t => {
+        if (t.center) {
+          const on = active === t.id;
+          return (
+            <button key={t.id} onClick={() => setActive(t.id)} className="mtab mtab-center">
+              <div className="mtab-fab"><Icon name={t.icon} size={24} /></div>
+              <span style={{ color: on ? '#be185d' : '#a98a94', fontWeight: on ? 600 : 400 }}>{t.label}</span>
+            </button>
+          );
+        }
+        const on = t.id !== '__menu' && active === t.id;
+        return (
+          <button key={t.id} onClick={() => (t.id === '__menu' ? onMenu() : setActive(t.id))} className="mtab" style={{ color: on ? '#be185d' : '#a98a94' }}>
+            <Icon name={t.icon} size={22} />
+            <span style={{ fontWeight: on ? 600 : 400 }}>{t.label}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+};
 
 // ============== HEADER ==============
 const Header = ({ selectedClass, setSelectedClass, selectedBook, setSelectedBook, teacherName, setTeacherName, schoolName, setSchoolName, onMobileMenuToggle, setActive }) => {
@@ -9346,6 +9395,9 @@ const App = () => {
           setActive={handleNavAndClose} />
         <main className="flex-1 overflow-y-auto scrollbar p-6 main-content-area">{renderContent()}</main>
       </div>
+
+      {/* Thanh tab dưới — chỉ hiện trên điện thoại */}
+      <MobileTabBar active={active} setActive={handleNavAndClose} onMenu={() => setMobileMenuOpen(true)} />
 
       {/* AI Chat Panel */}
       <AIChatPanel
