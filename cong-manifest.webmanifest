@@ -1,6 +1,6 @@
 {
-  "name": "Cổng Lớp Học – Trợ Lý Giáo Viên",
-  "short_name": "Lớp Học",
+  "name": "Lớp cô Thu",
+  "short_name": "Lớp cô Thu",
   "description": "Vào lớp, làm bài có giờ, xem điểm và trò chuyện với cô giáo.",
   "lang": "vi",
   "start_url": "/cong",

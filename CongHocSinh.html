@@ -11,13 +11,17 @@
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-<meta name="apple-mobile-web-app-title" content="Lớp Học" />
+<meta name="apple-mobile-web-app-title" content="Lớp cô Thu" />
 <link rel="apple-touch-icon" href="/cong-icon.svg" />
 <script>
   // Đăng ký service worker để "Thêm vào màn hình chính". Bỏ qua khi chạy thử ở localhost.
   if ('serviceWorker' in navigator && !/^(localhost|127\.|0\.0\.0\.0)/.test(location.hostname)) {
     window.addEventListener('load', function () { navigator.serviceWorker.register('/cong-sw.js').catch(function () {}); });
   }
+  // Bắt sự kiện "có thể cài app" để hiện nút Thêm vào màn hình chính (Android/Chrome/Edge/Cốc Cốc).
+  window.__deferredPrompt = null;
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); window.__deferredPrompt = e; window.dispatchEvent(new Event('pwa-installable')); });
+  window.addEventListener('appinstalled', function () { window.__deferredPrompt = null; window.dispatchEvent(new Event('pwa-installed')); });
 </script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
@@ -195,6 +199,38 @@ const fileToDataURL = (file, maxW = 1000, q = 0.72) => new Promise((res, rej) =>
   };
   rd.readAsDataURL(file);
 });
+// Vẽ icon app (nền gradient teal→rose + chữ tên lớp, vd "6A") → data URL PNG.
+const makeIconPNG = (label, size) => {
+  const cv = document.createElement('canvas'); cv.width = size; cv.height = size;
+  const g = cv.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, size, size); gr.addColorStop(0, '#0f766e'); gr.addColorStop(1, '#be185d');
+  g.fillStyle = gr; g.fillRect(0, 0, size, size);
+  const txt = (label || 'Lớp').toString().slice(0, 4);
+  let fr = 0.5; if (txt.length === 3) fr = 0.38; else if (txt.length >= 4) fr = 0.3;
+  g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = '700 ' + Math.round(size * fr) + 'px Georgia, serif';
+  g.fillText(txt, size / 2, size * 0.54);
+  return cv.toDataURL('image/png');
+};
+// Đổi tên app = "Lớp cô Thu" và icon = tên lớp đang gõ (vd 6A), ngay trước khi cài.
+const applyDynamicIcon = (label) => {
+  try {
+    const i192 = makeIconPNG(label || 'Lớp', 192), i512 = makeIconPNG(label || 'Lớp', 512);
+    const man = {
+      name: 'Lớp cô Thu', short_name: 'Lớp cô Thu',
+      description: 'Vào lớp, làm bài, xem điểm và trò chuyện với cô.',
+      lang: 'vi', start_url: '/cong', scope: '/', display: 'standalone', orientation: 'portrait',
+      background_color: '#fdfaf6', theme_color: '#0f766e',
+      icons: [
+        { src: i192, sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+        { src: i512, sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+      ],
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(man)], { type: 'application/manifest+json' }));
+    const link = document.querySelector('link[rel="manifest"]'); if (link) link.href = url;
+    const at = document.querySelector('link[rel="apple-touch-icon"]'); if (at) at.href = i192;
+  } catch (e) { /* trình duyệt cũ: bỏ qua, vẫn dùng icon mặc định */ }
+};
 // "còn 2 ngày 3 giờ" / "sắp hết hạn" cho hạn nộp
 const timeLeft = (deadline) => {
   if (!deadline) return '';
@@ -624,11 +660,87 @@ const MessagesView = ({ cls, sender }) => {
   );
 };
 
+// ============== NÚT CÀI APP (Thêm vào màn hình chính) ==============
+const InstallCard = ({ clsName, theme }) => {
+  const standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent || '');
+  const [canInstall, setCanInstall] = useState(!!window.__deferredPrompt);
+  const [installed, setInstalled] = useState(standalone);
+  const [help, setHelp] = useState(false);
+  useEffect(() => {
+    const on = () => setCanInstall(true);
+    const oni = () => { setInstalled(true); setCanInstall(false); };
+    window.addEventListener('pwa-installable', on);
+    window.addEventListener('pwa-installed', oni);
+    return () => { window.removeEventListener('pwa-installable', on); window.removeEventListener('pwa-installed', oni); };
+  }, []);
+  if (installed) return null;
+  const doInstall = async () => {
+    const dp = window.__deferredPrompt;
+    if (dp) {
+      dp.prompt();
+      const r = await dp.userChoice.catch(() => ({ outcome: 'dismissed' }));
+      if (r.outcome === 'accepted') setInstalled(true);
+      window.__deferredPrompt = null; setCanInstall(false);
+      return;
+    }
+    setHelp(true);
+  };
+  const label = (clsName || 'Lớp').toString().slice(0, 3);
+  return (
+    <div className="glass rounded-2xl p-3 mb-4 flex items-center gap-3 shadow-lg pop">
+      <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-extrabold shadow shrink-0" style={{ background: `linear-gradient(135deg,${theme.a},${theme.b})`, fontSize: label.length > 2 ? 15 : 19 }}>{label}</div>
+      <div className="flex-1 min-w-0">
+        <p className="font-bold text-sm text-slate-800 leading-tight">Cài “Lớp cô Thu” vào máy</p>
+        <p className="text-[11px] text-slate-500 leading-tight mt-0.5">{clsName ? ('Lớp ' + clsName + ' · ') : ''}Mở nhanh như một ứng dụng 📲</p>
+      </div>
+      <button onClick={doInstall} className="btn-grad text-xs font-bold px-4 py-2.5 rounded-xl whitespace-nowrap shrink-0" style={{ '--a': theme.a, '--b': theme.b }}>＋ Thêm</button>
+      {help && <Modal title="📲 Thêm vào màn hình chính" onClose={() => setHelp(false)}>
+        {isIOS ? (
+          <div className="text-sm space-y-2">
+            <p className="text-slate-600">Trên iPhone/iPad, dùng trình duyệt <b>Safari</b>:</p>
+            <ol className="list-decimal ml-5 space-y-1.5 text-slate-700">
+              <li>Bấm nút <b>Chia sẻ</b> ⬆️ ở thanh dưới màn hình.</li>
+              <li>Kéo xuống, chọn <b>“Thêm vào MH chính”</b>.</li>
+              <li>Bấm <b>Thêm</b> — biểu tượng “Lớp cô Thu” hiện ra như một app 🌸</li>
+            </ol>
+          </div>
+        ) : (
+          <div className="text-sm space-y-2">
+            <p className="text-slate-600">Trên Android / máy tính (Chrome, Cốc Cốc, Edge):</p>
+            <ol className="list-decimal ml-5 space-y-1.5 text-slate-700">
+              <li>Bấm nút <b>⋮</b> (menu) ở góc trình duyệt.</li>
+              <li>Chọn <b>“Thêm vào Màn hình chính”</b> hoặc <b>“Cài đặt ứng dụng”</b>.</li>
+              <li>Xác nhận <b>Thêm / Cài đặt</b> — xong 🌸</li>
+            </ol>
+          </div>
+        )}
+      </Modal>}
+    </div>
+  );
+};
+
 // ============== HỌC SINH — VÀO LỚP ==============
 const StudentJoin = ({ onBack, onJoined }) => {
   const [code, setCode] = useState(localStorage.getItem('sv_code') || '');
   const [name, setName] = useState(localStorage.getItem('sv_name') || '');
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
+  const [clsName, setClsName] = useState('');
+  // Khi gõ đủ mã lớp: tra tên lớp (vd "6A") để đặt icon app và trấn an em đã đúng lớp.
+  useEffect(() => {
+    let cancel = false;
+    const C = code.trim().toUpperCase();
+    if (C.length < 4) { setClsName(''); return; }
+    const t = setTimeout(async () => {
+      try {
+        if (!auth.currentUser) await auth.signInAnonymously();
+        const snap = await db.collection('classes').doc(C).get();
+        if (!cancel) setClsName(snap.exists ? (snap.data().name || '') : '');
+      } catch (e) { if (!cancel) setClsName(''); }
+    }, 500);
+    return () => { cancel = true; clearTimeout(t); };
+  }, [code]);
+  useEffect(() => { applyDynamicIcon(clsName); }, [clsName]);
   const join = async () => {
     setErr(''); const C = code.trim().toUpperCase();
     if (!C || !name.trim()) { setErr('Nhập mã lớp và họ tên.'); return; }
@@ -674,10 +786,12 @@ const StudentJoin = ({ onBack, onJoined }) => {
           <h1 className="font-bold text-3xl font-display hdr-title">Cổng Lớp Học</h1>
           <span className="inline-flex items-center gap-1.5 mt-2 text-xs font-semibold occ-chip px-3.5 py-1.5 rounded-full shadow">{theme.emoji} {theme.label}</span>
         </div>
+        <InstallCard clsName={clsName} theme={theme} />
         <div className="glass rounded-[28px] p-6 shadow-2xl">
           <div className="text-center mb-5"><div className="text-3xl mb-1">✨</div><h2 className="font-bold text-lg">Vào lớp học của em</h2><p className="text-xs text-slate-500 mt-1">Nhập mã lớp cô cho và họ tên nhé</p></div>
           <label className="block text-sm font-semibold mb-1 text-slate-600">🔑 Mã lớp</label>
-          <input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="VD: ABC123" maxLength={8} className="ans w-full px-3 py-3 border-2 border-slate-200 rounded-2xl mb-4 tracking-[.3em] text-center font-bold text-xl" style={{ '--a': theme.a }} />
+          <input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="VD: ABC123" maxLength={8} className={`ans w-full px-3 py-3 border-2 rounded-2xl tracking-[.3em] text-center font-bold text-xl ${clsName ? 'border-emerald-300 mb-1' : 'border-slate-200 mb-4'}`} style={{ '--a': theme.a }} />
+          {clsName && <p className="text-[12px] text-emerald-600 font-semibold mb-4 ml-1">✓ Lớp {clsName}</p>}
           <label className="block text-sm font-semibold mb-1 text-slate-600">🙋 Họ và tên</label>
           <input value={name} onChange={e => setName(e.target.value)} placeholder="VD: Nguyễn Văn An" onKeyDown={e => e.key === 'Enter' && join()} className="ans w-full px-3 py-3 border-2 border-slate-200 rounded-2xl mb-4 font-medium" style={{ '--a': theme.a }} />
           {err && <div className="text-sm bg-rose-50 text-rose-700 rounded-xl px-3 py-2 mb-3 pop">⚠️ {err}</div>}
