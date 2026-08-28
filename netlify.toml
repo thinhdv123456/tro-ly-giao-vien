@@ -5,7 +5,7 @@
 [build]
   publish = "dist"
   # Sinh index.html + _redirects: định tuyến /api/claude/message tới Netlify Function TRƯỚC, rồi mới tới trang chính.
-  command = "mkdir -p dist && cp TroLyGiaoVien_Phase4_REFACTORED.html dist/index.html && cp CongHocSinh.html dist/cong.html && cp cong-manifest.webmanifest cong-sw.js cong-icon.svg dist/ && printf '/api/claude/message  /.netlify/functions/claude  200\\n/cong  /cong.html  200\\n/*  /index.html  200\\n' > dist/_redirects"
+  command = "mkdir -p dist && cp TroLyGiaoVien_Phase4_REFACTORED.html dist/index.html && cp CongHocSinh.html dist/cong.html && cp demo-bang-dieu-khien.html dist/demo.html && cp cong-manifest.webmanifest cong-sw.js cong-icon.svg dist/ && printf '/api/claude/message  /.netlify/functions/claude  200\\n/cong  /cong.html  200\\n/demo  /demo.html  200\\n/*  /index.html  200\\n' > dist/_redirects"
 
 [functions]
   directory = "netlify/functions"

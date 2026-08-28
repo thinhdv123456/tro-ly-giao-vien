@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bảng điều khiển · Lớp Học Kết Nối (bản xem trước)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+<style>
+  *{font-family:'Be Vietnam Pro',sans-serif;box-sizing:border-box}
+  .font-display{font-family:'Playfair Display',serif}
+  body{margin:0;color:#4a2530;background:linear-gradient(160deg,#fff1f4 0%,#ffe0ea 44%,#ffdbc9 100%);background-attachment:fixed;min-height:100vh}
+  .glass{background:rgba(255,255,255,.74);backdrop-filter:blur(14px) saturate(1.4);-webkit-backdrop-filter:blur(14px) saturate(1.4);border:1px solid rgba(255,255,255,.82);border-radius:20px;box-shadow:0 10px 26px -16px rgba(190,24,93,.30)}
+  .bar{height:8px;border-radius:99px;background:rgba(190,24,93,.13);overflow:hidden}
+  .bar>i{display:block;height:100%;border-radius:99px}
+  .btn{font-size:12px;padding:8px 12px;border-radius:11px;border:1px solid #f3c6d5;background:#fff;color:#9f1239;font-weight:500;cursor:pointer;transition:.15s}
+  .btn:hover{background:#fff1f5}
+  .btn-primary{background:linear-gradient(135deg,#be185d,#ec4899);color:#fff;border:none}
+  .chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px}
+  ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#f3c6d5;border-radius:8px}
+</style>
+</head>
+<body>
+<div class="max-w-6xl mx-auto px-4 md:px-6 py-5">
+
+  <div style="background:#fce7ee;border:1px solid #f7c9dc;color:#9f1239" class="rounded-2xl px-4 py-2.5 mb-4 text-xs md:text-sm flex items-center gap-2">
+    <span>👁️</span><b>Bản xem trước</b> — số liệu là <b>dữ liệu mẫu</b> để cô duyệt giao diện. Khi ghép vào chương trình sẽ lấy số thật của các lớp.
+  </div>
+
+  <div class="flex items-center justify-between gap-3 mb-5">
+    <div class="flex items-center gap-3">
+      <div class="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-2xl shadow" style="background:linear-gradient(135deg,#be185d,#ec4899)">🌐</div>
+      <div>
+        <h1 class="text-xl md:text-2xl font-bold font-display leading-tight" style="color:#9f1239">Lớp Học Kết Nối</h1>
+        <p class="text-xs" style="color:#8a5a68">Chào cô Thu · thứ sáu, 28/08/2026</p>
+      </div>
+    </div>
+    <button class="btn btn-primary hidden sm:inline-flex items-center gap-1">＋ Giao bài mới</button>
+  </div>
+
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+    <div class="glass p-4"><p class="text-xs" style="color:#8a5a68">Lớp đang dạy</p><p class="text-2xl font-bold mt-1">5</p></div>
+    <div class="glass p-4"><p class="text-xs" style="color:#8a5a68">Bài đang giao</p><p class="text-2xl font-bold mt-1">8</p></div>
+    <div class="glass p-4" style="border-color:#f7c9dc"><p class="text-xs" style="color:#be185d">Bài chờ chấm</p><p class="text-2xl font-bold mt-1" style="color:#be185d">23</p></div>
+    <div class="glass p-4" style="border-color:#fbd9a0"><p class="text-xs" style="color:#b45309">Tin nhắn mới</p><p class="text-2xl font-bold mt-1" style="color:#d97706">6</p></div>
+  </div>
+
+  <div class="glass p-4 mb-5" style="border-color:#f7c9dc">
+    <p class="font-semibold mb-1 flex items-center gap-2" style="color:#be185d">⚠️ Cần xử lý ngay</p>
+    <div class="flex items-center justify-between gap-3 py-2.5 border-t" style="border-color:#f3d9e2"><span class="text-sm">📝 <b>23 bài</b> đang chờ cô chấm điểm</span><button class="btn btn-primary">Chấm ngay</button></div>
+    <div class="flex items-center justify-between gap-3 py-2.5 border-t" style="border-color:#f3d9e2"><span class="text-sm">💬 <b>6 tin nhắn</b> phụ huynh chưa trả lời</span><button class="btn">Trả lời</button></div>
+    <div class="flex items-center justify-between gap-3 py-2.5 border-t" style="border-color:#f3d9e2"><span class="text-sm">⏰ <b>2 bài</b> sắp hết hạn nộp (8C, 9A)</span><button class="btn">Xem</button></div>
+  </div>
+
+  <div class="grid lg:grid-cols-3 gap-5">
+    <div class="lg:col-span-2">
+      <p class="font-semibold mb-3">Các lớp của cô</p>
+      <div class="grid sm:grid-cols-2 gap-3">
+
+        <div class="glass p-4">
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-2.5"><div class="w-10 h-10 rounded-xl flex items-center justify-center font-semibold" style="background:rgba(190,24,93,.12);color:#be185d">6A</div><div><p class="font-semibold text-sm">Ngữ văn 6A</p><p class="text-[11px]" style="color:#8a5a68">32 học sinh</p></div></div>
+            <span class="chip" style="background:#fbeaf0;color:#be185d">💬 1 mới</span>
+          </div>
+          <div class="flex justify-between text-[11px] mb-1"><span style="color:#8a5a68">Tiến độ nộp</span><span class="font-semibold">18/32</span></div>
+          <div class="bar"><i style="width:56%;background:#be185d"></i></div>
+          <div class="flex gap-1.5 flex-wrap my-3"><span class="chip" style="background:rgba(190,24,93,.08)">📋 2 đang giao</span><span class="chip" style="background:#fbeaf0;color:#be185d">✅ 5 chờ chấm</span></div>
+          <div class="flex gap-2"><button class="btn btn-primary flex-1">Chấm bài</button><button class="btn flex-1">Giao bài</button><button class="btn flex-1">Nhắn lớp</button></div>
+        </div>
+
+        <div class="glass p-4">
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-2.5"><div class="w-10 h-10 rounded-xl flex items-center justify-center font-semibold" style="background:rgba(190,24,93,.12);color:#be185d">7B</div><div><p class="font-semibold text-sm">Ngữ văn 7B</p><p class="text-[11px]" style="color:#8a5a68">30 học sinh</p></div></div>
+            <span class="chip" style="background:#eaf3de;color:#3b6d11">✓ xong</span>
+          </div>
+          <div class="flex justify-between text-[11px] mb-1"><span style="color:#8a5a68">Tiến độ nộp</span><span class="font-semibold">25/30</span></div>
+          <div class="bar"><i style="width:83%;background:#be185d"></i></div>
+          <div class="flex gap-1.5 flex-wrap my-3"><span class="chip" style="background:rgba(190,24,93,.08)">📋 1 đang giao</span><span class="chip" style="background:#eaf3de;color:#3b6d11">✓ đã chấm hết</span></div>
+          <div class="flex gap-2"><button class="btn flex-1">Xem lớp</button><button class="btn flex-1">Giao bài</button><button class="btn flex-1">Nhắn lớp</button></div>
+        </div>
+
+        <div class="glass p-4">
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-2.5"><div class="w-10 h-10 rounded-xl flex items-center justify-center font-semibold" style="background:rgba(217,119,6,.16);color:#d97706">8C</div><div><p class="font-semibold text-sm">Ngữ văn 8C</p><p class="text-[11px]" style="color:#8a5a68">28 học sinh</p></div></div>
+            <span class="chip" style="background:#faeeda;color:#b45309">⏰ sắp hết hạn</span>
+          </div>
+          <div class="flex justify-between text-[11px] mb-1"><span style="color:#8a5a68">Tiến độ nộp</span><span class="font-semibold">9/28</span></div>
+          <div class="bar"><i style="width:32%;background:#d97706"></i></div>
+          <div class="flex gap-1.5 flex-wrap my-3"><span class="chip" style="background:rgba(190,24,93,.08)">📋 3 đang giao</span><span class="chip" style="background:#fbeaf0;color:#be185d">✅ 3 chờ chấm</span><span class="chip" style="background:#fbeaf0;color:#be185d">💬 2 tin</span></div>
+          <div class="flex gap-2"><button class="btn btn-primary flex-1">Chấm bài</button><button class="btn flex-1">Giao bài</button><button class="btn flex-1">Nhắn lớp</button></div>
+        </div>
+
+        <div class="glass p-4">
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-2.5"><div class="w-10 h-10 rounded-xl flex items-center justify-center font-semibold" style="background:rgba(190,24,93,.12);color:#be185d">9A</div><div><p class="font-semibold text-sm">Ngữ văn 9A</p><p class="text-[11px]" style="color:#8a5a68">27 học sinh</p></div></div>
+            <span class="chip" style="background:#fbeaf0;color:#be185d">💬 3 mới</span>
+          </div>
+          <div class="flex justify-between text-[11px] mb-1"><span style="color:#8a5a68">Tiến độ nộp</span><span class="font-semibold">20/27</span></div>
+          <div class="bar"><i style="width:74%;background:#be185d"></i></div>
+          <div class="flex gap-1.5 flex-wrap my-3"><span class="chip" style="background:rgba(190,24,93,.08)">📋 2 đang giao</span><span class="chip" style="background:#fbeaf0;color:#be185d">✅ 8 chờ chấm</span></div>
+          <div class="flex gap-2"><button class="btn btn-primary flex-1">Chấm bài</button><button class="btn flex-1">Giao bài</button><button class="btn flex-1">Nhắn lớp</button></div>
+        </div>
+
+      </div>
+    </div>
+
+    <div>
+      <p class="font-semibold mb-3">Hoạt động gần đây</p>
+      <div class="glass p-1.5">
+        <div class="flex items-center gap-3 px-3 py-3 text-sm"><span>📄</span><span class="flex-1">Nguyễn Văn An (6A) đã nộp "Đề KT 45 phút"</span><span class="text-[11px]" style="color:#8a5a68">5'</span></div>
+        <div class="flex items-center gap-3 px-3 py-3 text-sm border-t" style="border-color:#f3d9e2"><span>💬</span><span class="flex-1">PH em Trần Bình (8C): "Cô ơi cho em hỏi…"</span><span class="text-[11px]" style="color:#8a5a68">20'</span></div>
+        <div class="flex items-center gap-3 px-3 py-3 text-sm border-t" style="border-color:#f3d9e2"><span>🎒</span><span class="flex-1">Lê Thị Chi vừa tham gia lớp 9A</span><span class="text-[11px]" style="color:#8a5a68">1 giờ</span></div>
+        <div class="flex items-center gap-3 px-3 py-3 text-sm border-t" style="border-color:#f3d9e2"><span>📄</span><span class="flex-1">Phạm Minh (9A) đã nộp bài viết tay 📷</span><span class="text-[11px]" style="color:#8a5a68">2 giờ</span></div>
+      </div>
+    </div>
+  </div>
+
+  <p class="text-center text-[11px] mt-8" style="color:#b89aa4">Bản xem trước giao diện · Trợ lý giáo viên Ngữ văn 🌸</p>
+</div>
+</body>
+</html>
