@@ -1609,130 +1609,233 @@ const BackBtn = ({ label, onClick }) => (
   </button>
 );
 
+// ============== CẤU TRÚC NAV 5 TAB CHÍNH ==============
+const NAV_TABS = [
+  { id: 'home',     label: 'Trang chủ', icon: 'Home',          maps: ['dashboard'] },
+  { id: 'compose',  label: 'Soạn bài',  icon: 'PenTool',       maps: ['planning','lesson','exam'],
+    children: [
+      { id: 'planning', label: 'Lập kế hoạch',    icon: 'CalendarDays' },
+      { id: 'lesson',   label: 'Soạn giáo án',    icon: 'BookOpen' },
+      { id: 'exam',     label: 'Ra đề · Kiểm tra',icon: 'FileCheck' },
+    ]},
+  { id: 'online',   label: 'Lớp Học Kết Nối', icon: 'Globe', maps: ['online'] },
+  { id: 'messages', label: 'Tin nhắn',  icon: 'MessageCircle', maps: ['classes'] },
+  { id: 'more',     label: 'Thêm',      icon: 'LayoutGrid',    maps: ['library','admin','extra','settings','update'],
+    children: [
+      { id: 'library',  label: 'Thư viện',   icon: 'BookMarked' },
+      { id: 'settings', label: 'Cài đặt AI', icon: 'Settings' },
+      { id: 'admin',    label: 'Hành chính', icon: 'FolderKanban', soon: true },
+      { id: 'extra',    label: 'Ngoại khóa', icon: 'Sparkles',    soon: true },
+    ]},
+];
+
 // ============== SIDEBAR ==============
-const Sidebar = ({ active, setActive, collapsed, setCollapsed, onChatOpen, mobileOpen, onMobileClose }) => (
-  <aside className={`gradient-bg transition-all duration-300 flex flex-col desktop-sidebar ${collapsed ? 'w-20' : 'w-72'} sidebar-drawer ${mobileOpen ? 'open' : ''}`}
-    style={{position: undefined}}>
-    {/* Logo + tiêu đề */}
-    <div className="px-4 py-5 border-b border-rose-100/80 flex items-center justify-between relative z-10">
-      {!collapsed && (
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-rose-100 to-amber-100 border border-rose-200 flex items-center justify-center shadow-sm">
-            <span className="text-xl">📖</span>
+const Sidebar = ({ active, setActive, collapsed, setCollapsed, onChatOpen, mobileOpen, lastComposeTab }) => {
+  const handleTabClick = (tab) => {
+    if (tab.children) {
+      if (!tab.maps.includes(active)) {
+        const target = tab.id === 'compose'
+          ? (lastComposeTab || tab.children[0].id)
+          : (tab.children.find(c => !c.soon)?.id || tab.children[0].id);
+        setActive(target);
+      }
+    } else {
+      setActive(tab.maps[0]);
+    }
+  };
+
+  return (
+    <aside className={`gradient-bg transition-all duration-300 flex flex-col desktop-sidebar ${collapsed ? 'w-20' : 'w-64'} sidebar-drawer ${mobileOpen ? 'open' : ''}`}>
+      {/* Logo */}
+      <div className="px-4 py-5 border-b border-rose-100/80 flex items-center justify-between relative z-10">
+        {!collapsed && (
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-rose-100 to-amber-100 border border-rose-200 flex items-center justify-center shadow-sm">
+              <span className="text-xl">📖</span>
+            </div>
+            <div>
+              <h1 className="text-[15px] font-bold leading-tight font-display text-rose-900">Trợ Lý GV</h1>
+              <p className="text-[10px] text-rose-400 italic">Ngữ văn THCS · CTGDPT 2018</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-[15px] font-bold leading-tight font-display text-rose-900">Trợ Lý GV</h1>
-            <p className="text-[10px] text-rose-400 italic">Ngữ văn THCS · CTGDPT 2018</p>
+        )}
+        {collapsed && <div className="mx-auto w-9 h-9 rounded-xl bg-gradient-to-br from-rose-100 to-amber-100 flex items-center justify-center"><span className="text-lg">📖</span></div>}
+        <button onClick={() => setCollapsed(!collapsed)} className="p-2 rounded-lg hover:bg-rose-50 text-rose-400 hover:text-rose-600 transition ml-auto"><Icon name="Menu" size={19} /></button>
+      </div>
+
+      {/* 5 tab chính */}
+      <nav className="flex-1 py-2 scrollbar overflow-y-auto relative z-10">
+        {NAV_TABS.map(tab => {
+          const on = tab.maps.includes(active);
+          const isOnline = tab.id === 'online';
+          return (
+            <div key={tab.id}>
+              <button
+                onClick={() => handleTabClick(tab)}
+                className={`w-full flex items-center gap-3 text-left text-[13.5px] transition ${
+                  isOnline
+                    ? `${collapsed ? 'px-0 justify-center' : 'px-4'} py-3 mx-2 my-1.5 rounded-2xl`
+                    : `sidebar-item px-5 py-2.5 ${on ? 'active' : ''}`
+                }`}
+                style={isOnline
+                  ? (on ? {background:'linear-gradient(135deg,#be185d,#ec4899)',color:'#fff',boxShadow:'0 8px 18px -6px rgba(190,24,93,.4)'}
+                         : {background:'linear-gradient(135deg,#fff1f5,#ffe4ec)',border:'1px solid #fbcfe8',color:'#9f1239'})
+                  : {}}>
+                <span className={`flex-shrink-0 ${isOnline ? '' : (on ? 'text-rose-700' : 'text-rose-400')}`}>
+                  <Icon name={tab.icon} size={isOnline ? 20 : 18} />
+                </span>
+                {!collapsed && <span className="flex-1">{tab.label}</span>}
+                {!collapsed && isOnline && (
+                  <span className="text-[9px] px-2 py-0.5 rounded-full font-bold"
+                    style={on ? {background:'rgba(255,255,255,.25)',color:'#fff'} : {background:'#be185d',color:'#fff'}}>MỚI</span>
+                )}
+                {!collapsed && !isOnline && tab.children && (
+                  <Icon name={on ? 'ChevronDown' : 'ChevronRight'} size={13}
+                    className={on ? 'text-rose-300' : 'text-rose-200'} />
+                )}
+              </button>
+
+              {/* Sub-items khi tab đang active */}
+              {!collapsed && on && tab.children && (
+                <div className="ml-3 mr-2 border-l-2 border-rose-100 pl-2 pb-1">
+                  {tab.children.map(sub => (
+                    <button key={sub.id}
+                      onClick={() => !sub.soon && setActive(sub.id)}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12.5px] text-left transition my-0.5 ${
+                        active === sub.id
+                          ? 'bg-rose-50 text-rose-700 font-semibold'
+                          : 'text-rose-400 hover:bg-rose-50/60 hover:text-rose-600'
+                      } ${sub.soon ? 'opacity-50 cursor-default' : 'cursor-pointer'}`}>
+                      <Icon name={sub.icon} size={14} />
+                      <span className="flex-1">{sub.label}</span>
+                      {sub.soon && <span className="text-[9px] bg-amber-100 text-amber-500 px-1.5 py-0.5 rounded-full">sắp có</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </nav>
+
+      {/* Footer */}
+      {!collapsed && (
+        <div className="p-4 border-t border-rose-100 relative z-10 space-y-3">
+          <button onClick={onChatOpen} className="w-full bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white py-2.5 rounded-xl font-medium flex items-center justify-center gap-2 transition shadow-md text-sm">
+            🤖 Trợ Lý AI
+          </button>
+          <div className="flex items-center gap-2.5 px-1">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-rose-200 to-amber-200 flex items-center justify-center text-[15px] shadow-sm">🌸</div>
+            <div>
+              <p className="text-rose-900 font-semibold text-[12px]">Chào cô Thu</p>
+              <p className="text-[10px] text-rose-400 italic">Một ngày dạy học an yên</p>
+            </div>
+          </div>
+          <div className="bg-rose-50/80 rounded-xl p-2.5 border border-rose-100">
+            <p className="text-[10px] text-rose-500 font-semibold mb-1.5">💰 Chi Phí API hôm nay</p>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 bg-white rounded-lg p-1.5 border border-rose-100 text-center">
+                <p id="costToday" className="text-rose-700 font-bold text-xs">$0.0000</p>
+              </div>
+              <button onClick={() => setActive('settings')} className="text-[10px] bg-rose-50 text-rose-700 px-2 py-1.5 rounded-lg border border-rose-100 hover:bg-rose-100 font-medium transition">⚙️ AI</button>
+            </div>
+          </div>
+          <p className="text-[10px] text-rose-300 text-center italic">v4.3 · Thơ văn 🌸</p>
+        </div>
+      )}
+      {collapsed && (
+        <div className="p-3 border-t border-rose-100 relative z-10 flex flex-col items-center gap-2">
+          <button onClick={onChatOpen} title="Trợ Lý AI" className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-400 to-pink-400 text-white flex items-center justify-center shadow-md">🤖</button>
+          <button onClick={() => setActive('settings')} title="Cài đặt AI" className="w-10 h-10 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center hover:bg-rose-100 transition border border-rose-100">
+            <Icon name="Settings" size={16} />
+          </button>
+        </div>
+      )}
+    </aside>
+  );
+};
+
+// ============== THANH TAB DƯỚI (ĐIỆN THOẠI) — 5 tab chuẩn ==============
+const MobileTabBar = ({ active, setActive, lastComposeTab }) => {
+  const [showMore, setShowMore] = useState(false);
+  const composeIds = ['planning','lesson','exam'];
+  const moreIds = ['library','admin','extra','settings','update'];
+  const tabs = [
+    { id: 'dashboard', label: 'Trang chủ', icon: 'Home' },
+    { id: '__compose', label: 'Soạn bài',  icon: 'PenTool' },
+    { id: 'online',    label: 'Lớp học',   icon: 'Globe', center: true },
+    { id: 'classes',   label: 'Tin nhắn',  icon: 'MessageCircle' },
+    { id: '__more',    label: 'Thêm',      icon: 'LayoutGrid' },
+  ];
+  const moreItems = [
+    { id: 'library',  label: 'Thư viện',   icon: 'BookMarked',   color: '#be185d' },
+    { id: 'settings', label: 'Cài đặt AI', icon: 'Settings',     color: '#d97706' },
+    { id: 'admin',    label: 'Hành chính', icon: 'FolderKanban', color: '#7c3aed', soon: true },
+    { id: 'extra',    label: 'Ngoại khóa', icon: 'Sparkles',     color: '#059669', soon: true },
+  ];
+  const isOn = (t) => {
+    if (t.id === '__compose') return composeIds.includes(active);
+    if (t.id === '__more') return moreIds.includes(active);
+    return active === t.id;
+  };
+  const handleTab = (t) => {
+    if (t.id === '__compose') setActive(lastComposeTab || 'planning');
+    else if (t.id === '__more') setShowMore(true);
+    else setActive(t.id);
+  };
+
+  return (
+    <>
+      <nav className="mobile-tabbar">
+        {tabs.map(t => {
+          if (t.center) {
+            const on = active === t.id;
+            return (
+              <button key={t.id} onClick={() => setActive(t.id)} className="mtab mtab-center">
+                <div className="mtab-fab"><Icon name={t.icon} size={24} /></div>
+                <span style={{ color: on ? '#be185d' : '#a98a94', fontWeight: on ? 600 : 400 }}>{t.label}</span>
+              </button>
+            );
+          }
+          const on = isOn(t);
+          return (
+            <button key={t.id} onClick={() => handleTab(t)} className="mtab" style={{ color: on ? '#be185d' : '#a98a94' }}>
+              <Icon name={t.icon} size={22} />
+              <span style={{ fontWeight: on ? 600 : 400 }}>{t.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Bottom sheet "Thêm" */}
+      {showMore && (
+        <div className="fixed inset-0 z-50 flex items-end"
+          style={{background:'rgba(60,42,33,0.35)',backdropFilter:'blur(2px)'}}
+          onClick={() => setShowMore(false)}>
+          <div className="w-full rounded-t-3xl p-5 pb-10"
+            style={{background:'rgba(255,255,255,0.97)',backdropFilter:'blur(20px)'}}
+            onClick={e => e.stopPropagation()}>
+            <div className="w-10 h-1 bg-rose-200 rounded-full mx-auto mb-4" />
+            <p className="text-[11px] font-bold text-rose-300 uppercase tracking-widest mb-4 px-2">Tính năng khác</p>
+            <div className="grid grid-cols-4 gap-2">
+              {moreItems.map(item => (
+                <button key={item.id}
+                  onClick={() => { if (!item.soon) { setActive(item.id); setShowMore(false); } }}
+                  className="flex flex-col items-center gap-2 p-3 rounded-2xl transition"
+                  style={{opacity: item.soon ? 0.45 : 1, background: active===item.id ? `${item.color}15` : 'transparent'}}>
+                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm"
+                    style={{background:`${item.color}18`}}>
+                    <Icon name={item.icon} size={24} style={{color:item.color}} />
+                  </div>
+                  <span className="text-[12px] font-medium text-rose-900">{item.label}</span>
+                  {item.soon && <span className="text-[9px] text-rose-300">sắp có</span>}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
-      {collapsed && <div className="mx-auto w-9 h-9 rounded-xl bg-gradient-to-br from-rose-100 to-amber-100 flex items-center justify-center"><span className="text-lg">📖</span></div>}
-      <button onClick={() => setCollapsed(!collapsed)} className="p-2 rounded-lg hover:bg-rose-50 text-rose-400 hover:text-rose-600 transition ml-auto"><Icon name="Menu" size={19} /></button>
-    </div>
-
-    {/* Navigation — ghim Lớp Học Kết Nối + phân nhóm */}
-    <nav className="flex-1 py-2 scrollbar overflow-y-auto relative z-10">
-      {/* ⭐ Ghim: trung tâm Lớp Học Kết Nối */}
-      {MENU_ITEMS.filter(m => m.group === 'pinned').map(item => (
-        <button key={item.id} onClick={() => setActive(item.id)}
-          className={`w-full flex items-center gap-3 ${collapsed ? 'px-0 justify-center' : 'px-4'} py-3 mx-2 my-2 rounded-2xl text-left text-[13.5px] transition`}
-          style={active === item.id
-            ? { background: 'linear-gradient(135deg,#be185d,#ec4899)', color: '#fff', boxShadow: '0 8px 18px -6px rgba(190,24,93,.4)', width: collapsed ? 'auto' : undefined }
-            : { background: 'linear-gradient(135deg,#fff1f5,#ffe4ec)', border: '1px solid #fbcfe8', color: '#9f1239' }}>
-          <Icon name={item.icon} size={20} />
-          {!collapsed && (<><span className="flex-1 font-semibold">{item.label}</span>
-            <span className="text-[9px] px-2 py-0.5 rounded-full font-bold" style={active === item.id ? { background: 'rgba(255,255,255,.25)', color: '#fff' } : { background: '#be185d', color: '#fff' }}>MỚI</span></>)}
-        </button>
-      ))}
-      {/* Các nhóm chức năng */}
-      {MENU_GROUPS.map(g => (
-        <div key={g}>
-          {!collapsed && <p className="px-5 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-rose-300">{g}</p>}
-          {MENU_ITEMS.filter(m => m.group === g).map(item => (
-            <button key={item.id} onClick={() => setActive(item.id)}
-              className={`sidebar-item w-full flex items-center gap-3 px-5 py-2.5 text-left text-[13.5px] ${active === item.id ? 'active' : ''}`}>
-              <span className={`flex-shrink-0 ${active === item.id ? 'text-rose-700' : 'text-rose-400'}`}>
-                <Icon name={item.icon} size={18} />
-              </span>
-              {!collapsed && <span className="flex-1">{item.label}</span>}
-            </button>
-          ))}
-        </div>
-      ))}
-    </nav>
-
-    {/* Footer sidebar */}
-    {!collapsed && (
-      <div className="p-4 border-t border-rose-100 relative z-10 space-y-3">
-        {/* 🤖 AI Chat Button */}
-        <button onClick={onChatOpen} className="w-full bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white py-2.5 rounded-xl font-medium flex items-center justify-center gap-2 transition shadow-md text-sm">
-          🤖 Trợ Lý AI
-        </button>
-
-        {/* Chào cô */}
-        <div className="flex items-center gap-2.5 px-1">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-rose-200 to-amber-200 flex items-center justify-center text-[15px] shadow-sm">🌸</div>
-          <div>
-            <p className="text-rose-900 font-semibold text-[12px]">Chào cô Thu</p>
-            <p className="text-[10px] text-rose-400 italic">Một ngày dạy học an yên</p>
-          </div>
-        </div>
-
-        {/* 💰 API Cost Widget */}
-        <div className="bg-rose-50/80 rounded-xl p-2.5 border border-rose-100">
-          <p className="text-[10px] text-rose-500 font-semibold mb-1.5">💰 Chi Phí API hôm nay</p>
-          <div className="flex items-center gap-2">
-            <div className="flex-1 bg-white rounded-lg p-1.5 border border-rose-100 text-center">
-              <p id="costToday" className="text-rose-700 font-bold text-xs">$0.0000</p>
-            </div>
-            <button onClick={() => setActive('settings')} className="text-[10px] bg-teal-50 text-teal-700 px-2 py-1.5 rounded-lg border border-teal-100 hover:bg-teal-100 font-medium transition">⚙️ AI</button>
-          </div>
-        </div>
-
-        <p className="text-[10px] text-rose-300 text-center italic">v4.3 · Thơ văn 🌸</p>
-      </div>
-    )}
-    {collapsed && (
-      <div className="p-3 border-t border-rose-100 relative z-10 flex flex-col items-center gap-2">
-        <button onClick={onChatOpen} title="Trợ Lý AI" className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-400 to-pink-400 text-white flex items-center justify-center shadow-md">🤖</button>
-        <button onClick={() => setActive('settings')} title="Cài đặt AI" className="w-10 h-10 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center hover:bg-rose-100 transition border border-rose-100">
-          <Icon name="Settings" size={16} />
-        </button>
-      </div>
-    )}
-  </aside>
-);
-
-// ============== THANH TAB DƯỚI (ĐIỆN THOẠI) ==============
-const MobileTabBar = ({ active, setActive, onMenu }) => {
-  const tabs = [
-    { id: 'dashboard', label: 'Tổng quan', icon: 'LayoutDashboard' },
-    { id: 'lesson', label: 'Soạn bài', icon: 'BookOpen' },
-    { id: 'online', label: 'Lớp học', icon: 'Cloud', center: true },
-    { id: 'exam', label: 'Đánh giá', icon: 'FileCheck' },
-    { id: '__menu', label: 'Menu', icon: 'Menu' },
-  ];
-  return (
-    <nav className="mobile-tabbar">
-      {tabs.map(t => {
-        if (t.center) {
-          const on = active === t.id;
-          return (
-            <button key={t.id} onClick={() => setActive(t.id)} className="mtab mtab-center">
-              <div className="mtab-fab"><Icon name={t.icon} size={24} /></div>
-              <span style={{ color: on ? '#be185d' : '#a98a94', fontWeight: on ? 600 : 400 }}>{t.label}</span>
-            </button>
-          );
-        }
-        const on = t.id !== '__menu' && active === t.id;
-        return (
-          <button key={t.id} onClick={() => (t.id === '__menu' ? onMenu() : setActive(t.id))} className="mtab" style={{ color: on ? '#be185d' : '#a98a94' }}>
-            <Icon name={t.icon} size={22} />
-            <span style={{ fontWeight: on ? 600 : 400 }}>{t.label}</span>
-          </button>
-        );
-      })}
-    </nav>
+    </>
   );
 };
 
@@ -9274,6 +9377,7 @@ const App = () => {
   const [teacherName, setTeacherName] = useState('');
   const [schoolName, setSchoolName] = useState('');
   const [showChat, setShowChat] = useState(false);
+  const [lastComposeTab, setLastComposeTab] = useState('planning');
   const [fbUser, setFbUser] = useState(null);        // ☁️ tài khoản đám mây đang đăng nhập
   const [authReady, setAuthReady] = useState(false);  // đã kiểm tra tình trạng đăng nhập xong chưa
   const dataLoadedRef = useRef(false); // 🛟 chốt an toàn: chỉ cho phép lưu SAU khi đã nạp xong dữ liệu cũ
@@ -9356,6 +9460,7 @@ const App = () => {
 
   const handleNavAndClose = (id) => {
     setActive(id);
+    if (['planning','lesson','exam'].includes(id)) setLastComposeTab(id);
     setMobileMenuOpen(false);
   };
 
@@ -9384,7 +9489,7 @@ const App = () => {
       {/* Sidebar desktop + mobile drawer */}
       <Sidebar active={active} setActive={handleNavAndClose} collapsed={collapsed} setCollapsed={setCollapsed}
         onChatOpen={() => { setShowChat(true); setMobileMenuOpen(false); }}
-        mobileOpen={mobileMenuOpen} />
+        mobileOpen={mobileMenuOpen} lastComposeTab={lastComposeTab} />
 
       {/* Overlay backdrop khi sidebar mở trên mobile */}
       {mobileMenuOpen && (
@@ -9402,7 +9507,7 @@ const App = () => {
       </div>
 
       {/* Thanh tab dưới — chỉ hiện trên điện thoại */}
-      <MobileTabBar active={active} setActive={handleNavAndClose} onMenu={() => setMobileMenuOpen(true)} />
+      <MobileTabBar active={active} setActive={handleNavAndClose} lastComposeTab={lastComposeTab} />
 
       {/* AI Chat Panel */}
       <AIChatPanel
