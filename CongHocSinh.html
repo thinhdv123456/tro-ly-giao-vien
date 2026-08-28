@@ -26,6 +26,31 @@
   .btn-rose { background:#be185d; color:#fff; } .btn-rose:hover { background:#a4174f; }
   input, textarea, select { font-family:'Be Vietnam Pro',sans-serif; }
   ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#e7dcd0;border-radius:8px}
+
+  /* ===== NỀN THEO MÙA / DỊP LỄ ===== */
+  .seasonal-bg{position:fixed;inset:0;z-index:-3;animation:bgshift 22s ease infinite;}
+  @keyframes bgshift{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+  .seasonal-veil{position:fixed;inset:0;z-index:-2;pointer-events:none;
+    background:radial-gradient(130% 100% at 50% -10%, rgba(255,255,255,.34), rgba(255,255,255,.04) 46%, rgba(255,255,255,.28) 100%);}
+  .motif{position:fixed;bottom:-48px;z-index:-1;pointer-events:none;user-select:none;will-change:transform;
+    animation-name:floatUp;animation-timing-function:linear;animation-iteration-count:infinite;filter:drop-shadow(0 4px 6px rgba(0,0,0,.12));}
+  @keyframes floatUp{0%{transform:translateY(0) rotate(0deg);opacity:0}
+    8%{opacity:.65}92%{opacity:.55}100%{transform:translateY(-118vh) rotate(340deg);opacity:0}}
+
+  /* ===== KÍNH MỜ + NÚT GRADIENT ===== */
+  .glass{background:rgba(255,255,255,.86);backdrop-filter:blur(14px) saturate(1.25);-webkit-backdrop-filter:blur(14px) saturate(1.25);border:1px solid rgba(255,255,255,.7);}
+  .btn-grad{background:linear-gradient(135deg,var(--a,#0f766e),var(--b,#be185d));color:#fff;
+    box-shadow:0 10px 24px -8px var(--a,#0f766e);transition:transform .14s ease, box-shadow .14s ease;}
+  .btn-grad:hover{box-shadow:0 14px 30px -8px var(--a,#0f766e);}
+  .btn-grad:active{transform:scale(.97);}
+  .hdr-title{color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.3);}
+  .occ-chip{background:rgba(255,255,255,.78);backdrop-filter:blur(6px);color:#3c2a21;}
+  .pop{animation:pop .35s cubic-bezier(.2,1.3,.5,1);}
+  @keyframes pop{from{transform:scale(.93);opacity:0}to{transform:scale(1);opacity:1}}
+  .qcard{background:#fff;border:1px solid #ece3d8;border-radius:20px;box-shadow:0 6px 18px -12px rgba(60,42,33,.25);}
+  .cnt-pill{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:3px 10px;border-radius:999px;}
+  textarea.ans{transition:border-color .15s, box-shadow .15s;}
+  textarea.ans:focus{outline:none;border-color:var(--a,#0f766e);box-shadow:0 0 0 4px color-mix(in srgb, var(--a,#0f766e) 18%, transparent);}
 </style>
 </head>
 <body>
@@ -62,6 +87,91 @@ const fmtTime = (sec) => {
 };
 const fmtDate = (ms) => ms ? new Date(ms).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '';
 const GRADE_COLOR = { 6: 'teal', 7: 'rose', 8: 'amber', 9: 'sky' };
+
+// ============== NỀN THEO MÙA / DỊP LỄ (tự đổi theo lịch) ==============
+// Ngày Mùng 1 Tết & Rằm Trung Thu theo dương lịch (âm lịch quy đổi sẵn).
+const TET_DATES = { 2025:'2025-01-29', 2026:'2026-02-17', 2027:'2027-02-06', 2028:'2028-01-26', 2029:'2029-02-13', 2030:'2030-02-03' };
+const TRUNGTHU_DATES = { 2025:'2025-10-06', 2026:'2026-09-25', 2027:'2027-09-15', 2028:'2028-10-03', 2029:'2029-09-22', 2030:'2030-09-12' };
+const OCCASIONS = {
+  tet:      { key:'tet',      label:'Tết Nguyên Đán',   emoji:'🧧', bg:'linear-gradient(135deg,#9f1239,#e11d48,#f59e0b)', a:'#e11d48', b:'#f59e0b', motifs:['🏮','🧧','🌸','🎆','🍊','🌺'] },
+  trungthu: { key:'trungthu', label:'Tết Trung Thu',    emoji:'🏮', bg:'linear-gradient(135deg,#b45309,#f59e0b,#fbbf24)', a:'#f59e0b', b:'#fb7185', motifs:['🏮','🌕','🥮','⭐','🐰','✨'] },
+  newyear:  { key:'newyear',  label:'Chào Năm Mới',     emoji:'🎆', bg:'linear-gradient(135deg,#0ea5e9,#22d3ee,#f472b6)', a:'#0ea5e9', b:'#f472b6', motifs:['🎆','🎇','✨','🥳','🎊','🎉'] },
+  noel:     { key:'noel',     label:'Giáng Sinh',       emoji:'🎄', bg:'linear-gradient(135deg,#9f1239,#dc2626,#0f766e)', a:'#dc2626', b:'#0f766e', motifs:['🎄','🎅','❄️','🎁','⛄','⭐'] },
+  love:     { key:'love',     label:'Lễ Tình Nhân',     emoji:'💗', bg:'linear-gradient(135deg,#fb7185,#f472b6,#fecdd3)', a:'#fb7185', b:'#f472b6', motifs:['💗','💕','🌹','💌','💞'] },
+  women:    { key:'women',    label:'Ngày Phụ Nữ',      emoji:'🌷', bg:'linear-gradient(135deg,#db2777,#f472b6,#fda4af)', a:'#db2777', b:'#fb7185', motifs:['🌷','🌸','💐','🌹','💗'] },
+  children: { key:'children', label:'Tết Thiếu Nhi',    emoji:'🎈', bg:'linear-gradient(135deg,#06b6d4,#34d399,#fde047)', a:'#06b6d4', b:'#f59e0b', motifs:['🎈','🧸','🎠','🍭','🎨','🎪'] },
+  national: { key:'national', label:'Quốc Khánh 2/9',   emoji:'🇻🇳', bg:'linear-gradient(135deg,#b91c1c,#ef4444,#fbbf24)', a:'#dc2626', b:'#f59e0b', motifs:['🇻🇳','⭐','🎇','🎊'] },
+  labor:    { key:'labor',    label:'30/4 – 1/5',       emoji:'🎉', bg:'linear-gradient(135deg,#dc2626,#f59e0b,#fde047)', a:'#dc2626', b:'#f59e0b', motifs:['🇻🇳','🎉','⭐','🎊'] },
+  school:   { key:'school',   label:'Khai Giảng',       emoji:'🎒', bg:'linear-gradient(135deg,#0ea5e9,#14b8a6,#fbbf24)', a:'#0ea5e9', b:'#14b8a6', motifs:['🎒','📚','✏️','🍎','🎓','🌟'] },
+  teacher:  { key:'teacher',  label:'Ngày Nhà Giáo VN', emoji:'🌸', bg:'linear-gradient(135deg,#0f766e,#14b8a6,#f472b6)', a:'#0f766e', b:'#db2777', motifs:['🌸','🌹','💐','📖','🍎','❤️'] },
+  halloween:{ key:'halloween',label:'Halloween',        emoji:'🎃', bg:'linear-gradient(135deg,#c2410c,#ea580c,#334155)', a:'#ea580c', b:'#334155', motifs:['🎃','👻','🦇','🍬','🕸️'] },
+  spring:   { key:'spring',   label:'Mùa Xuân',         emoji:'🌸', bg:'linear-gradient(135deg,#34d399,#6ee7b7,#fbcfe8)', a:'#10b981', b:'#f472b6', motifs:['🌸','🌱','🦋','🌷','🍃'] },
+  summer:   { key:'summer',   label:'Mùa Hạ',           emoji:'☀️', bg:'linear-gradient(135deg,#06b6d4,#38bdf8,#fde047)', a:'#0ea5e9', b:'#f59e0b', motifs:['☀️','🏖️','🍉','🌊','🐚'] },
+  autumn:   { key:'autumn',   label:'Mùa Thu',          emoji:'🍂', bg:'linear-gradient(135deg,#d97706,#f59e0b,#fb923c)', a:'#d97706', b:'#fb923c', motifs:['🍂','🍁','🌾','🐿️','🍄'] },
+  winter:   { key:'winter',   label:'Mùa Đông',         emoji:'❄️', bg:'linear-gradient(135deg,#0284c7,#38bdf8,#bae6fd)', a:'#0284c7', b:'#38bdf8', motifs:['❄️','☃️','🧣','⛄','🌨️'] },
+};
+const dayIndex = (d) => Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
+const getOccasion = (now = new Date()) => {
+  const y = now.getFullYear(), md = (now.getMonth() + 1) * 100 + now.getDate(), di = dayIndex(now);
+  const tet = TET_DATES[y]; if (tet) { const t = dayIndex(new Date(tet)); if (di >= t - 6 && di <= t + 7) return OCCASIONS.tet; }
+  const tt = TRUNGTHU_DATES[y]; if (tt) { const t = dayIndex(new Date(tt)); if (Math.abs(di - t) <= 3) return OCCASIONS.trungthu; }
+  if (md >= 1220 && md <= 1226) return OCCASIONS.noel;
+  if (md >= 1227 || md <= 103)  return OCCASIONS.newyear;
+  if (md >= 213 && md <= 214)   return OCCASIONS.love;
+  if (md >= 306 && md <= 308)   return OCCASIONS.women;      // 8/3
+  if (md >= 428 && md <= 502)   return OCCASIONS.labor;      // 30/4 – 1/5
+  if (md >= 531 && md <= 601)   return OCCASIONS.children;   // 1/6
+  if (md >= 831 && md <= 902)   return OCCASIONS.national;   // 2/9
+  if (md >= 903 && md <= 908)   return OCCASIONS.school;     // khai giảng
+  if (md >= 1018 && md <= 1020) return OCCASIONS.women;      // 20/10
+  if (md >= 1028 && md <= 1031) return OCCASIONS.halloween;
+  if (md >= 1114 && md <= 1120) return OCCASIONS.teacher;    // 20/11
+  const m = now.getMonth() + 1;
+  if (m <= 3) return OCCASIONS.spring;
+  if (m <= 6) return OCCASIONS.summer;
+  if (m <= 9) return OCCASIONS.autumn;
+  return OCCASIONS.winter;
+};
+
+// ============== TÁCH ĐỀ THÀNH TỪNG CÂU (mỗi câu 1 ô trả lời) ==============
+const parseQuestions = (body) => {
+  const text = String(body || '').replace(/\r\n/g, '\n');
+  const re = /(?:^|\n)[ \t]*(Câu\s*\d+)[ \t]*[\.\:\)]?/gi;
+  const marks = []; let m;
+  while ((m = re.exec(text))) { marks.push({ index: m.index + m[0].indexOf('Câu'), label: m[1].replace(/\s+/g, ' ').trim() }); }
+  if (marks.length === 0) return { single: true, intro: '', questions: [{ label: '', prompt: text.trim() }] };
+  const intro = text.slice(0, marks[0].index).trim();
+  const questions = marks.map((mk, i) => {
+    const end = i + 1 < marks.length ? marks[i + 1].index : text.length;
+    return { label: mk.label, prompt: text.slice(mk.index, end).trim() };
+  });
+  return { single: false, intro, questions };
+};
+const stripLabel = (t) => String(t || '').replace(/^\s*Câu\s*\d+\s*[\.\:\)]?\s*/i, '').trim();
+const countChars = (s) => (s || '').length;
+const countWords = (s) => { const t = (s || '').trim(); return t ? t.split(/\s+/).length : 0; };
+
+// ============== NỀN ĐỘNG THEO DỊP ==============
+const SeasonalBg = ({ theme }) => {
+  const motifs = React.useMemo(() => {
+    const arr = [];
+    for (let i = 0; i < 16; i++) arr.push({
+      e: theme.motifs[i % theme.motifs.length],
+      left: Math.round(Math.random() * 96),
+      dur: (13 + Math.random() * 16).toFixed(1),
+      delay: (Math.random() * 18).toFixed(1),
+      size: 16 + Math.round(Math.random() * 24),
+    });
+    return arr;
+  }, [theme.key]);
+  return (
+    <React.Fragment>
+      <div className="seasonal-bg" style={{ background: theme.bg, backgroundSize: '300% 300%' }} />
+      <div className="seasonal-veil" />
+      {motifs.map((mo, i) => <span key={i} className="motif" style={{ left: mo.left + '%', animationDuration: mo.dur + 's', animationDelay: mo.delay + 's', fontSize: mo.size + 'px' }}>{mo.e}</span>)}
+    </React.Fragment>
+  );
+};
 
 // ============== AI (dùng chung key với app chính vì cùng tên miền) ==============
 const getClaudeKey = () => (localStorage.getItem('claude_api_key') || '').trim();
@@ -498,20 +608,27 @@ const StudentJoin = ({ onBack, onJoined }) => {
       }
     } finally { setBusy(false); }
   };
+  const theme = getOccasion();
   return (
-    <div className="min-h-screen flex items-center justify-center p-5" style={{ background: 'linear-gradient(160deg,#fdf2f8,#f0fdfa)' }}>
-      <div className="w-full max-w-sm fade-in">
-        {onBack && <button onClick={onBack} className="text-sm text-slate-500 mb-3">← Quay lại</button>}
-        <div className="text-center mb-4"><div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-rose-500 to-teal-500 flex items-center justify-center text-white text-2xl mb-2">🏫</div><h1 className="font-bold text-xl font-display">Cổng Lớp Học</h1></div>
-        <div className="card p-6">
-          <div className="text-center mb-5"><div className="text-3xl mb-2">🎒</div><h2 className="font-bold text-lg">Vào lớp học</h2><p className="text-xs text-slate-500 mt-1">Nhập mã lớp cô cho và họ tên của em</p></div>
-          <label className="block text-sm font-medium mb-1">Mã lớp</label>
-          <input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="VD: ABC123" maxLength={8} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl mb-3 tracking-widest text-center font-bold text-lg" />
-          <label className="block text-sm font-medium mb-1">Họ và tên</label>
-          <input value={name} onChange={e => setName(e.target.value)} placeholder="VD: Nguyễn Văn An" onKeyDown={e => e.key === 'Enter' && join()} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl mb-3" />
-          {err && <div className="text-sm bg-rose-50 text-rose-700 rounded-lg px-3 py-2 mb-3">⚠️ {err}</div>}
-          <button onClick={join} disabled={busy} className="btn-rose w-full py-3 rounded-xl font-semibold disabled:opacity-60">{busy ? <Spinner /> : 'Vào lớp'}</button>
+    <div className="min-h-screen flex items-center justify-center p-5 relative">
+      <SeasonalBg theme={theme} />
+      <div className="w-full max-w-sm pop">
+        {onBack && <button onClick={onBack} className="text-sm text-white/90 mb-3 drop-shadow">← Quay lại</button>}
+        <div className="text-center mb-5">
+          <div className="w-20 h-20 mx-auto rounded-[26px] flex items-center justify-center text-white text-4xl mb-3 shadow-2xl" style={{ background: `linear-gradient(135deg,${theme.a},${theme.b})` }}>🎒</div>
+          <h1 className="font-bold text-3xl font-display hdr-title">Cổng Lớp Học</h1>
+          <span className="inline-flex items-center gap-1.5 mt-2 text-xs font-semibold occ-chip px-3.5 py-1.5 rounded-full shadow">{theme.emoji} {theme.label}</span>
         </div>
+        <div className="glass rounded-[28px] p-6 shadow-2xl">
+          <div className="text-center mb-5"><div className="text-3xl mb-1">✨</div><h2 className="font-bold text-lg">Vào lớp học của em</h2><p className="text-xs text-slate-500 mt-1">Nhập mã lớp cô cho và họ tên nhé</p></div>
+          <label className="block text-sm font-semibold mb-1 text-slate-600">🔑 Mã lớp</label>
+          <input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="VD: ABC123" maxLength={8} className="ans w-full px-3 py-3 border-2 border-slate-200 rounded-2xl mb-4 tracking-[.3em] text-center font-bold text-xl" style={{ '--a': theme.a }} />
+          <label className="block text-sm font-semibold mb-1 text-slate-600">🙋 Họ và tên</label>
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="VD: Nguyễn Văn An" onKeyDown={e => e.key === 'Enter' && join()} className="ans w-full px-3 py-3 border-2 border-slate-200 rounded-2xl mb-4 font-medium" style={{ '--a': theme.a }} />
+          {err && <div className="text-sm bg-rose-50 text-rose-700 rounded-xl px-3 py-2 mb-3 pop">⚠️ {err}</div>}
+          <button onClick={join} disabled={busy} className="btn-grad w-full py-3.5 rounded-2xl font-bold text-base disabled:opacity-60" style={{ '--a': theme.a, '--b': theme.b }}>{busy ? <Spinner /> : '🚀 Vào lớp'}</button>
+        </div>
+        <p className="text-center text-[11px] text-white/85 mt-4 drop-shadow">Học tập vui mỗi ngày · Trợ Lý Giáo Viên 🌸</p>
       </div>
     </div>
   );
@@ -533,60 +650,83 @@ const StudentHome = ({ sv, onLeave }) => {
     return () => { un1(); un2(); };
   }, [sv.code]);
   if (doing) return <DoAssignment sv={sv} asg={doing} sub={mySubs[doing.id]} onDone={() => setDoing(null)} />;
+  const theme = getOccasion();
+  const tabs = [['bai', '📝', 'Bài tập'], ['diem', '📊', 'Điểm'], ['msg', '💬', 'Trò chuyện']];
   return (
-    <div className="min-h-screen pb-10">
-      <div className="btn-rose px-5 py-4 flex items-center justify-between sticky top-0 z-10">
-        <div><p className="font-semibold">Lớp {sv.cls.name}</p><p className="text-[11px] text-rose-100">{sv.name}</p></div>
-        <button onClick={onLeave} className="text-xs bg-white/15 px-3 py-1.5 rounded-lg">Thoát</button>
+    <div className="min-h-screen pb-12 relative">
+      <SeasonalBg theme={theme} />
+      <div className="px-5 py-4 flex items-center justify-between sticky top-0 z-20 shadow-lg" style={{ background: `linear-gradient(135deg,${theme.a},${theme.b})` }}>
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-2xl bg-white/25 backdrop-blur flex items-center justify-center text-2xl">🎒</div>
+          <div>
+            <p className="font-bold hdr-title leading-tight">Lớp {sv.cls.name}</p>
+            <p className="text-[11px] text-white/90">{sv.name} · {theme.emoji} {theme.label}</p>
+          </div>
+        </div>
+        <button onClick={onLeave} className="text-xs font-semibold bg-white/20 hover:bg-white/30 text-white px-3 py-2 rounded-xl backdrop-blur transition">Thoát</button>
       </div>
-      <div className="flex border-b bg-white sticky top-[60px] z-10 text-sm">
-        {[['bai', '📝 Bài tập'], ['diem', '📊 Điểm'], ['msg', '💬 Trò chuyện']].map(([k, l]) =>
-          <button key={k} onClick={() => setTab(k)} className={`flex-1 py-3 font-medium ${tab === k ? 'text-rose-700 border-b-2 border-rose-600' : 'text-slate-500'}`}>{l}</button>)}
+      <div className="max-w-2xl mx-auto px-3 pt-3 sticky top-[68px] z-10">
+        <div className="glass rounded-2xl p-1.5 flex gap-1 shadow">
+          {tabs.map(([k, ic, l]) =>
+            <button key={k} onClick={() => setTab(k)} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition ${tab === k ? 'text-white shadow' : 'text-slate-500 hover:bg-white/60'}`} style={tab === k ? { background: `linear-gradient(135deg,${theme.a},${theme.b})` } : {}}>{ic} {l}</button>)}
+        </div>
       </div>
       <div className="max-w-2xl mx-auto p-4">
-        {tab === 'bai' && <>
-          {assignments.length === 0 && <p className="text-center text-slate-400 py-8">Chưa có bài tập nào.</p>}
+        {tab === 'bai' && <div className="fade-in">
+          {assignments.length === 0 && <div className="glass rounded-3xl p-10 text-center"><div className="text-5xl mb-2">🌱</div><p className="text-slate-500 font-medium">Chưa có bài tập nào.</p><p className="text-xs text-slate-400 mt-1">Cô giao bài là em sẽ thấy ở đây nhé!</p></div>}
           {assignments.map(a => {
             const sub = mySubs[a.id]; const expired = a.deadline && Date.now() > a.deadline;
             const done = sub && (sub.status === 'submitted' || sub.status === 'released');
-            return <div key={a.id} className="card p-4 mb-3">
+            const inprog = sub && sub.status === 'in_progress';
+            return <div key={a.id} className="glass rounded-3xl p-5 mb-3.5 shadow-lg pop">
               <div className="flex items-start justify-between gap-2">
-                <div><p className="font-semibold text-rose-900">{a.title}</p><p className="text-xs text-slate-500 mt-0.5">⏱ {a.durationMin} phút · Hạn {fmtDate(a.deadline)}</p></div>
-                {done ? <Badge tone="green">Đã nộp ✓</Badge> : expired ? <Badge tone="gray">Hết hạn</Badge> : <Badge tone="amber">Chưa làm</Badge>}
+                <div className="flex-1"><p className="font-bold text-[15px] text-slate-800 leading-snug">{a.title}</p><p className="text-xs text-slate-500 mt-1">⏱ {a.durationMin} phút · Hạn {fmtDate(a.deadline)}</p></div>
+                {done ? <Badge tone="green">Đã nộp ✓</Badge> : expired ? <Badge tone="gray">Hết hạn</Badge> : inprog ? <Badge tone="amber">Đang làm</Badge> : <Badge tone="rose">Chưa làm</Badge>}
               </div>
-              {!done && !expired && <button onClick={() => setDoing(a)} className="btn-rose w-full py-2.5 rounded-xl font-semibold mt-3">{sub && sub.status === 'in_progress' ? '⏱ Tiếp tục làm bài' : 'Bắt đầu làm bài'}</button>}
-              {done && sub.status === 'released' && <div className="mt-3 bg-teal-50 rounded-xl p-3"><p className="text-sm">Điểm: <b className="text-teal-700 text-lg">{sub.finalScore}</b>/10</p>{sub.finalFeedback && <p className="text-xs text-teal-800 mt-1">💬 {sub.finalFeedback}</p>}</div>}
-              {done && sub.status === 'submitted' && <p className="text-xs text-slate-400 mt-2 text-center">Đã nộp — chờ cô chấm 🌸</p>}
+              {!done && !expired && <button onClick={() => setDoing(a)} className="btn-grad w-full py-3 rounded-2xl font-bold mt-4" style={{ '--a': theme.a, '--b': theme.b }}>{inprog ? '⏱ Tiếp tục làm bài' : '✍️ Bắt đầu làm bài'}</button>}
+              {done && sub.status === 'released' && <div className="mt-4 rounded-2xl p-4 text-white" style={{ background: `linear-gradient(135deg,${theme.a},${theme.b})` }}><p className="text-sm">🎉 Điểm của em: <b className="text-2xl align-middle">{sub.finalScore}</b><span className="opacity-90">/10</span></p>{sub.finalFeedback && <p className="text-xs mt-1.5 bg-white/20 rounded-xl px-3 py-2">💬 {sub.finalFeedback}</p>}</div>}
+              {done && sub.status === 'submitted' && <p className="text-xs text-amber-600 mt-3 text-center font-medium bg-amber-50 rounded-xl py-2">✅ Đã nộp — chờ cô chấm 🌸</p>}
             </div>;
           })}
-        </>}
-        {tab === 'diem' && <>
-          {Object.values(mySubs).filter(s => s.status === 'released').length === 0 && <p className="text-center text-slate-400 py-8">Chưa có điểm nào được trả.</p>}
+        </div>}
+        {tab === 'diem' && <div className="fade-in">
+          {Object.values(mySubs).filter(s => s.status === 'released').length === 0 && <div className="glass rounded-3xl p-10 text-center"><div className="text-5xl mb-2">📊</div><p className="text-slate-500 font-medium">Chưa có điểm nào được trả.</p></div>}
           {Object.values(mySubs).filter(s => s.status === 'released').map(s => {
             const a = assignments.find(x => x.id === s.assignmentId);
-            return <div key={s.id} className="card p-4 mb-3"><div className="flex items-center justify-between"><p className="font-semibold">{a ? a.title : 'Bài tập'}</p><p className="text-2xl font-bold text-teal-700">{s.finalScore}</p></div>{s.finalFeedback && <div className="bg-slate-50 rounded-lg p-3 mt-2 text-sm">💬 {s.finalFeedback}</div>}</div>;
+            return <div key={s.id} className="glass rounded-3xl p-5 mb-3.5 shadow-lg pop"><div className="flex items-center justify-between"><p className="font-bold text-slate-800">{a ? a.title : 'Bài tập'}</p><p className="text-3xl font-extrabold" style={{ color: theme.a }}>{s.finalScore}</p></div>{s.finalFeedback && <div className="bg-slate-50 rounded-2xl p-3 mt-2.5 text-sm text-slate-700">💬 {s.finalFeedback}</div>}</div>;
           })}
-        </>}
-        {tab === 'msg' && <MessagesView cls={sv.cls} sender={{ role: 'student', name: sv.name }} />}
+        </div>}
+        {tab === 'msg' && <div className="fade-in"><MessagesView cls={sv.cls} sender={{ role: 'student', name: sv.name }} /></div>}
       </div>
     </div>
   );
 };
 
-// ============== HỌC SINH — LÀM BÀI (CÓ ĐỒNG HỒ) ==============
+// ============== HỌC SINH — LÀM BÀI (CÓ ĐỒNG HỒ · MỖI CÂU 1 Ô) ==============
 const DoAssignment = ({ sv, asg, sub, onDone }) => {
+  const theme = getOccasion();
   const subId = asg.id + '_' + auth.currentUser.uid;
   const ref = db.collection('classes').doc(sv.code).collection('submissions').doc(subId);
-  const [answer, setAnswer] = useState(sub ? (sub.answer || '') : '');
+  const parsed = React.useMemo(() => parseQuestions(asg.body), [asg.id]);
+  const qs = parsed.questions;
+  const initAnswers = () => {
+    if (sub && sub.answersByQ && Object.keys(sub.answersByQ).length) return { ...sub.answersByQ };
+    if (sub && sub.answer) return { 0: sub.answer };
+    return {};
+  };
+  const [answers, setAnswers] = useState(initAnswers);
+  const answersRef = useRef(answers); answersRef.current = answers;
   const [startedAt] = useState(sub && sub.startedAt ? sub.startedAt : Date.now());
   const [remain, setRemain] = useState(0);
   const submittedRef = useRef(false);
+  const buildCombined = (ans) => qs.map((q, i) => `${q.label || (parsed.single ? 'Bài làm' : 'Câu ' + (i + 1))}:\n${(ans[i] || '').trim()}`).join('\n\n');
   useEffect(() => {
-    if (!sub || !sub.startedAt) ref.set({ assignmentId: asg.id, studentAuthUid: auth.currentUser.uid, studentName: sv.name, answer: '', startedAt, status: 'in_progress' }, { merge: true });
+    if (!sub || !sub.startedAt) ref.set({ assignmentId: asg.id, studentAuthUid: auth.currentUser.uid, studentName: sv.name, answer: '', answersByQ: {}, startedAt, status: 'in_progress' }, { merge: true });
   }, []);
   const doSubmit = async (auto) => {
     if (submittedRef.current) return; submittedRef.current = true;
-    await ref.set({ assignmentId: asg.id, studentAuthUid: auth.currentUser.uid, studentName: sv.name, answer, startedAt, submittedAt: Date.now(), status: 'submitted' }, { merge: true });
+    const ans = answersRef.current;
+    await ref.set({ assignmentId: asg.id, studentAuthUid: auth.currentUser.uid, studentName: sv.name, answer: buildCombined(ans), answersByQ: ans, startedAt, submittedAt: Date.now(), status: 'submitted' }, { merge: true });
     alert(auto ? '⏰ Hết giờ! Bài đã tự nộp.' : '✅ Đã nộp bài. Chờ cô chấm nhé 🌸');
     onDone();
   };
@@ -600,28 +740,52 @@ const DoAssignment = ({ sv, asg, sub, onDone }) => {
     };
     tick(); const iv = setInterval(tick, 1000); return () => clearInterval(iv);
   }, []);
-  useEffect(() => { const t = setTimeout(() => { ref.update({ answer }).catch(() => {}); }, 800); return () => clearTimeout(t); }, [answer]);
+  useEffect(() => { const t = setTimeout(() => { ref.update({ answersByQ: answers, answer: buildCombined(answers) }).catch(() => {}); }, 800); return () => clearTimeout(t); }, [answers]);
+  const setQ = (i, v) => setAnswers(a => ({ ...a, [i]: v }));
+  const answeredCount = qs.filter((_, i) => (answers[i] || '').trim()).length;
+  const totalWords = qs.reduce((n, _, i) => n + countWords(answers[i]), 0);
   const urgent = remain <= 60;
-  return (
-    <div className="min-h-screen pb-24">
-      <div className="btn-rose px-5 py-3 flex items-center gap-3 sticky top-0 z-10">
-        <div className="flex-1"><p className="font-semibold text-sm">{asg.title}</p></div>
-      </div>
-      <div className={`px-5 py-3 flex items-center justify-between sticky top-[52px] z-10 ${urgent ? 'bg-red-100 text-red-700' : 'bg-amber-50 text-amber-800'}`}>
-        <span className="text-sm">⏱ Thời gian còn lại</span>
-        <span className="text-2xl font-bold tracking-wider">{fmtTime(remain)}</span>
-      </div>
-      <div className="max-w-2xl mx-auto p-4 space-y-4">
-        <div className="card p-4"><p className="text-xs font-bold text-slate-500 uppercase mb-2">Đề bài</p><div className="text-sm whitespace-pre-wrap leading-relaxed">{asg.body}</div></div>
-        <div>
-          <p className="text-sm font-medium mb-1">Bài làm của em</p>
-          <textarea value={answer} onChange={e => setAnswer(e.target.value)} rows={12} placeholder="Gõ bài làm vào đây... (tự lưu, không lo mất)" className="w-full px-3 py-3 border border-slate-200 rounded-xl text-sm leading-relaxed" />
-          <p className="text-[11px] text-slate-400 mt-1">💾 Bài tự lưu liên tục. Hết giờ hệ thống sẽ tự nộp.</p>
+  // Dùng HÀM trả JSX (không phải component con) để ô nhập không bị mất con trỏ khi gõ.
+  const renderField = (i, heading, prompt) => {
+    const val = answers[i] || '';
+    return (
+      <div key={i} className="qcard p-4 mb-4">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="inline-flex items-center justify-center min-w-[30px] h-7 px-2 rounded-full text-white text-xs font-bold" style={{ background: `linear-gradient(135deg,${theme.a},${theme.b})` }}>{parsed.single ? '✍️' : (i + 1)}</span>
+          <p className="font-bold text-slate-800 text-sm">{heading}</p>
+        </div>
+        {prompt && <div className="text-[13px] text-slate-600 whitespace-pre-wrap leading-relaxed mb-2.5 bg-slate-50 rounded-xl px-3 py-2">{prompt}</div>}
+        <textarea value={val} onChange={e => setQ(i, e.target.value)} rows={parsed.single ? 12 : 5} placeholder="Em trả lời câu này vào đây…" className="ans w-full px-3 py-3 border-2 border-slate-200 rounded-2xl text-sm leading-relaxed" style={{ '--a': theme.a }} />
+        <div className="flex items-center justify-end gap-2 mt-2">
+          <span className="cnt-pill" style={{ background: 'color-mix(in srgb,' + theme.a + ' 12%,transparent)', color: theme.a }}>✍️ {countWords(val)} từ</span>
+          <span className="cnt-pill bg-slate-100 text-slate-500">🔤 {countChars(val)} ký tự</span>
         </div>
       </div>
-      <div className="fixed bottom-0 inset-x-0 p-3 bg-white border-t">
+    );
+  };
+
+  return (
+    <div className="min-h-screen pb-28 relative">
+      <SeasonalBg theme={theme} />
+      <div className="px-5 py-3 flex items-center gap-3 sticky top-0 z-20 shadow-lg" style={{ background: `linear-gradient(135deg,${theme.a},${theme.b})` }}>
+        <div className="flex-1"><p className="font-bold hdr-title text-sm leading-tight">{asg.title}</p><p className="text-[11px] text-white/90">Đã làm {answeredCount}/{qs.length} câu · {totalWords} từ</p></div>
+      </div>
+      <div className={`px-5 py-3 flex items-center justify-between sticky top-[56px] z-10 shadow ${urgent ? 'bg-red-500 text-white animate-pulse' : 'glass text-slate-700'}`}>
+        <span className="text-sm font-medium">⏱ Thời gian còn lại</span>
+        <span className="text-2xl font-extrabold tracking-wider tabular-nums">{fmtTime(remain)}</span>
+      </div>
+      <div className="max-w-2xl mx-auto p-4">
+        {!parsed.single && parsed.intro &&
+          <div className="qcard p-4 mb-4">
+            <p className="text-[11px] font-bold uppercase tracking-wide mb-2" style={{ color: theme.a }}>📖 Đề bài / Ngữ liệu</p>
+            <div className="text-[13px] whitespace-pre-wrap leading-relaxed text-slate-700">{parsed.intro}</div>
+          </div>}
+        {qs.map((q, i) => renderField(i, parsed.single ? 'Bài làm của em' : q.label, parsed.single ? '' : stripLabel(q.prompt)))}
+        <p className="text-[11px] text-slate-500 text-center mt-1">💾 Bài tự lưu liên tục — không lo mất. Hết giờ hệ thống tự nộp.</p>
+      </div>
+      <div className="fixed bottom-0 inset-x-0 p-3 glass border-t border-white/40 z-20">
         <div className="max-w-2xl mx-auto">
-          <button onClick={() => { if (confirm('Nộp bài ngay bây giờ?')) doSubmit(false); }} className="btn-rose w-full py-3 rounded-xl font-semibold">Nộp bài</button>
+          <button onClick={() => { if (confirm('Nộp bài ngay bây giờ? Sau khi nộp không sửa được nữa.')) doSubmit(false); }} className="btn-grad w-full py-3.5 rounded-2xl font-bold text-base" style={{ '--a': theme.a, '--b': theme.b }}>📨 Nộp bài</button>
         </div>
       </div>
     </div>
