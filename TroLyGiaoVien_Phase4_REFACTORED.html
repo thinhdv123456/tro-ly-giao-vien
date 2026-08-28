@@ -1264,6 +1264,44 @@ const callClaudeAPI = async (prompt, maxTokens = 1024) => {
   }
 };
 
+// 👁️ Claude ĐỌC ẢNH (vision): chấm bài chụp viết tay. images = mảng dataURL (data:image/...;base64,...)
+const parseImageDataURL = (durl) => {
+  const m = /^data:([^;]+);base64,(.*)$/s.exec(durl || '');
+  if (!m) return null;
+  return { media_type: m[1], data: m[2] };
+};
+const callClaudeVisionAPI = async (prompt, images = [], maxTokens = 1200) => {
+  const apiKey = getClaudeApiKey();
+  if (!apiKey) return { error: '❌ Chưa nhập Claude API Key' };
+  const content = [{ type: 'text', text: prompt }];
+  for (const im of images) {
+    const p = parseImageDataURL(typeof im === 'string' ? im : (im && im.dataURL));
+    if (p) content.push({ type: 'image', source: { type: 'base64', media_type: p.media_type, data: p.data } });
+  }
+  if (content.length === 1) return { error: '❌ Không đọc được ảnh đính kèm' };
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({ model: CLAUDE_MODEL, max_tokens: maxTokens, messages: [{ role: 'user', content }] })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const msg = (data && data.error && data.error.message) || ('HTTP ' + response.status);
+      return { error: `❌ Claude API lỗi: ${msg}` };
+    }
+    const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
+    return { success: true, text: text || '(Claude không trả về nội dung)' };
+  } catch (e) {
+    return { error: `❌ Lỗi kết nối Claude: ${e.message}` };
+  }
+};
+
 const chamBaiVoiGroq = async (text, loaiBai) => {
   const prompt = `Hãy chấm bài văn Tiếng Việt sau bằng tiếng Việt. Loại bài: ${loaiBai}. Bài viết:\n${text}\n\nVui lòng cho điểm (0-10) và nhận xét chi tiết về nội dung, cấu trúc, ngôn ngữ, chính tả.`;
   const result = await callGroqAPI(prompt, 800);
@@ -9094,9 +9132,15 @@ const OcGrade = ({ cls, asg, sub, onBack }) => {
   const [score,setScore]=useState(sub.finalScore??sub.autoScore??''); const [fb,setFb]=useState(sub.finalFeedback??sub.autoFeedback??''); const [grading,setGrading]=useState(false);
   const ref = fbDb.collection('classes').doc(cls.id).collection('submissions').doc(sub.id);
   const aiGrade = async () => {
+    const hasImages = sub.images && sub.images.length > 0;
+    // Bài nộp bằng ảnh chụp viết tay → cần Claude "nhìn" ảnh (Groq/Ollama không đọc được ảnh)
+    if (hasImages && !getClaudeApiKey()) {
+      alert('📷 Bài này nộp bằng ẢNH chụp bài viết tay.\n\nĐể AI đọc được chữ trong ảnh, cô cần dùng nguồn AI "Claude": vào ⚙️ Cài đặt AI → nhập Claude API Key → chọn Claude. (Groq/Ollama chưa đọc được ảnh ạ) 🌸');
+      return;
+    }
     setGrading(true);
-    const prompt=`Bạn là giáo viên Ngữ văn THCS. Hãy CHẤM bài làm học sinh theo đề. Trả lời tiếng Việt.\n\n=== ĐỀ ===\n${asg.body}\n\n=== BÀI LÀM ===\n${sub.answer||'(trống)'}\n\nCho ĐIỂM thang 10 và NHẬN XÉT ngắn gọn cụ thể, giọng động viên.\nĐỊNH DẠNG JSON thuần (không markdown): {"diem": <số 0-10>, "nhanxet": "..."}`;
-    const r = await callGroqAPI(prompt, 1200);
+    const prompt=`Bạn là giáo viên Ngữ văn THCS. Hãy CHẤM bài làm học sinh theo đề. Trả lời tiếng Việt.\n\n=== ĐỀ ===\n${asg.body}\n\n=== BÀI LÀM (phần gõ chữ) ===\n${sub.answer||'(học sinh không gõ chữ)'}\n${hasImages?'\n⚠️ Học sinh nộp bài bằng ẢNH CHỤP BÀI VIẾT TAY đính kèm bên dưới. Hãy ĐỌC KỸ chữ viết tay trong ảnh (đây mới là bài làm chính) rồi chấm theo đề. Nếu phần gõ chữ trống thì hoàn toàn dựa vào ảnh.\n':''}\nCho ĐIỂM thang 10 và NHẬN XÉT ngắn gọn cụ thể, giọng động viên (nêu nội dung em đã viết được).\nĐỊNH DẠNG JSON thuần (không markdown): {"diem": <số 0-10>, "nhanxet": "..."}`;
+    const r = hasImages ? await callClaudeVisionAPI(prompt, sub.images, 1400) : await callGroqAPI(prompt, 1200);
     setGrading(false);
     if (r.error){alert('Lỗi AI: '+r.error);return;}
     try{ const t=r.text.replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/```\s*$/,'').trim(); const j=JSON.parse(t); setScore(j.diem); setFb(j.nhanxet); await ref.update({autoScore:j.diem,autoFeedback:j.nhanxet,status:'graded'}); }

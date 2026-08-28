@@ -283,6 +283,27 @@ const callClaude = async (prompt, maxTokens = 1500) => {
     return { text: (d.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim() };
   } catch (e) { return { error: e.message }; }
 };
+// 👁️ Claude đọc ẢNH (chấm bài chụp viết tay). images = mảng dataURL.
+const callClaudeVision = async (prompt, images = [], maxTokens = 1400) => {
+  const key = getClaudeKey();
+  if (!key) return { error: 'Chưa có Claude API Key' };
+  const content = [{ type: 'text', text: prompt }];
+  for (const im of images) {
+    const m = /^data:([^;]+);base64,(.*)$/s.exec(im || '');
+    if (m) content.push({ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } });
+  }
+  if (content.length === 1) return { error: 'Không đọc được ảnh đính kèm' };
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model: 'claude-opus-4-8', max_tokens: maxTokens, messages: [{ role: 'user', content }] })
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) return { error: (d.error && d.error.message) || ('HTTP ' + r.status) };
+    return { text: (d.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim() };
+  } catch (e) { return { error: e.message }; }
+};
 const callGroq = async (prompt, maxTokens = 1500) => {
   const key = getGroqKey();
   if (!key) return { error: 'Chưa có Groq API Key' };
@@ -562,9 +583,14 @@ const GradeView = ({ cls, asg, sub, onBack }) => {
   const [grading, setGrading] = useState(false);
   const ref = db.collection('classes').doc(cls.id).collection('submissions').doc(sub.id);
   const aiGrade = async () => {
+    const hasImages = sub.images && sub.images.length > 0;
+    if (hasImages && !getClaudeKey()) {
+      alert('📷 Bài này nộp bằng ẢNH chụp viết tay. Để AI đọc được ảnh, cô cần dùng nguồn Claude (vào app chính ⚙️ Cài đặt AI → nhập Claude API Key → chọn Claude). 🌸');
+      return;
+    }
     setGrading(true);
-    const prompt = `Bạn là giáo viên Ngữ văn THCS. Hãy CHẤM bài làm của học sinh theo đề dưới đây. Trả lời bằng tiếng Việt.\n\n=== ĐỀ BÀI ===\n${asg.body}\n\n=== BÀI LÀM CỦA HỌC SINH ===\n${sub.answer || '(trống)'}\n\nYêu cầu: Cho ĐIỂM trên thang 10 và viết NHẬN XÉT ngắn gọn, cụ thể (ưu điểm + điều cần sửa), giọng động viên.\nĐỊNH DẠNG (JSON thuần, không markdown): {"diem": <số 0-10>, "nhanxet": "..."}`;
-    const r = await callAI(prompt, 1200);
+    const prompt = `Bạn là giáo viên Ngữ văn THCS. Hãy CHẤM bài làm của học sinh theo đề dưới đây. Trả lời bằng tiếng Việt.\n\n=== ĐỀ BÀI ===\n${asg.body}\n\n=== BÀI LÀM (phần gõ chữ) ===\n${sub.answer || '(học sinh không gõ chữ)'}\n${hasImages ? '\n⚠️ Học sinh nộp bài bằng ẢNH CHỤP BÀI VIẾT TAY đính kèm. Hãy ĐỌC KỸ chữ viết tay trong ảnh (đây là bài làm chính) rồi chấm. Nếu phần gõ chữ trống thì hoàn toàn dựa vào ảnh.\n' : ''}\nYêu cầu: Cho ĐIỂM thang 10 và viết NHẬN XÉT ngắn gọn, cụ thể (ưu điểm + điều cần sửa), giọng động viên.\nĐỊNH DẠNG (JSON thuần, không markdown): {"diem": <số 0-10>, "nhanxet": "..."}`;
+    const r = hasImages ? await callClaudeVision(prompt, sub.images, 1400) : await callAI(prompt, 1200);
     setGrading(false);
     if (r.error) { alert('Lỗi AI: ' + r.error); return; }
     try {
