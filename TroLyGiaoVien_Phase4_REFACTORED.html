@@ -29,22 +29,22 @@
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700;800&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    /* Palette "Cô Thu" — rose gold + teal + cream */
-    --c-primary: #0f766e;      /* Teal đậm - chuyên nghiệp */
-    --c-primary-soft: #14b8a6; /* Teal nhẹ */
-    --c-accent: #be185d;       /* Rose đậm - nữ tính */
-    --c-accent-soft: #ec4899;  /* Rose nhẹ */
-    --c-gold: #d97706;         /* Gold ấm */
-    --c-cream: #fdfaf6;        /* Kem trắng */
-    --c-cream-deep: #f5ede1;   /* Kem đậm */
-    --c-ink: #3c2a21;          /* Nâu đất ấm */
-    --c-ink-soft: #6b5a52;
-    --c-border: #e7dcd0;
+    /* Palette "Kem Hồng" — hồng + kem + đào + vàng (tông môn Văn) */
+    --c-primary: #be185d;      /* Hồng đậm - chủ đạo */
+    --c-primary-soft: #ec4899; /* Hồng tươi */
+    --c-accent: #e11d48;       /* Hồng-đỏ - nhấn AI/chấm */
+    --c-accent-soft: #fb7185;  /* Đào/coral */
+    --c-gold: #d97706;         /* Vàng kem ấm */
+    --c-cream: #fff7f4;        /* Kem hồng nhạt */
+    --c-cream-deep: #fdeae2;   /* Kem đậm */
+    --c-ink: #4a2530;          /* Nâu mận ấm */
+    --c-ink-soft: #8a5a68;
+    --c-border: #f0dcd0;
   }
   * { box-sizing: border-box; }
   body {
     font-family: 'Be Vietnam Pro', 'Segoe UI', Tahoma, sans-serif;
-    background: #fdfaf6;
+    background: #fff7f4;
     color: var(--c-ink);
     font-weight: 400;
   }
@@ -99,13 +99,13 @@
   .matrix-table input { width: 100%; text-align: center; background: transparent; outline: none; }
 
   .progress-bar { height: 10px; background: #f5ede1; border-radius: 999px; overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,0.05); }
-  .progress-fill { height: 100%; background: linear-gradient(90deg, #14b8a6 0%, #f59e0b 50%, #ec4899 100%); transition: width 0.4s cubic-bezier(.2,.8,.2,1); border-radius: 999px; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, #ec4899 0%, #f59e0b 50%, #be185d 100%); transition: width 0.4s cubic-bezier(.2,.8,.2,1); border-radius: 999px; }
 
   .score-circle { width: 100px; height: 100px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2rem; font-weight: 700; box-shadow: 0 8px 20px -6px rgba(190,24,93,0.25), inset 0 2px 4px rgba(255,255,255,0.6); }
 
   /* Các button gradient mặc định */
-  .btn-primary { background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%); color: white; transition: all 0.25s; }
-  .btn-primary:hover { box-shadow: 0 10px 25px -5px rgba(15,118,110,0.4); transform: translateY(-1px); }
+  .btn-primary { background: linear-gradient(135deg, #be185d 0%, #ec4899 100%); color: white; transition: all 0.25s; }
+  .btn-primary:hover { box-shadow: 0 10px 25px -5px rgba(190,24,93,0.4); transform: translateY(-1px); }
   .btn-accent  { background: linear-gradient(135deg, #be185d 0%, #ec4899 100%); color: white; transition: all 0.25s; }
   .btn-accent:hover { box-shadow: 0 10px 25px -5px rgba(190,24,93,0.4); transform: translateY(-1px); }
   .btn-gold    { background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%); color: white; transition: all 0.25s; }
@@ -113,14 +113,14 @@
   /* Soft card */
   .soft-card { background: white; border: 1px solid #e7dcd0; border-radius: 16px; box-shadow: 0 1px 3px rgba(60,42,33,0.04), 0 4px 12px -4px rgba(190,24,93,0.06); }
   .cream-card { background: linear-gradient(135deg, #fefdfb 0%, #fdf4e8 100%); border: 1px solid #f5ede1; border-radius: 16px; }
-  .teal-card { background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%); border: 1px solid #99f6e4; border-radius: 16px; }
+  .teal-card { background: linear-gradient(135deg, #fff1f2 0%, #fde4ec 100%); border: 1px solid #fbcfe8; border-radius: 16px; }
   .rose-card { background: linear-gradient(135deg, #fff1f2 0%, #fce7f3 100%); border: 1px solid #fbcfe8; border-radius: 16px; }
 
   /* Pretty input focus */
   input:focus, select:focus, textarea:focus {
     outline: none;
-    border-color: #0f766e;
-    box-shadow: 0 0 0 3px rgba(15,118,110,0.12);
+    border-color: #be185d;
+    box-shadow: 0 0 0 3px rgba(190,24,93,0.12);
   }
   input, select, textarea { transition: all 0.2s; }
 
@@ -134,6 +134,21 @@
   .bg-slate-100 { background-color: #f5ede1 !important; }
   .hover\:bg-slate-200:hover { background-color: #ecd9c6 !important; }
   .bg-slate-200 { background-color: #ecd9c6 !important; }
+
+  /* ══════ KEM HỒNG: ánh xạ teal/cyan (xanh cũ) → hồng, đồng bộ toàn app ══════ */
+  .bg-teal-50{background-color:#fff1f2!important}.bg-teal-100{background-color:#ffe4e6!important}.bg-teal-200{background-color:#fecdd3!important}.bg-teal-300{background-color:#fda4af!important}.bg-teal-500{background-color:#f43f5e!important}.bg-teal-600{background-color:#e11d48!important}.bg-teal-700{background-color:#be185d!important}.bg-teal-800{background-color:#9f1239!important}
+  .text-teal-400{color:#fb7185!important}.text-teal-500{color:#f43f5e!important}.text-teal-600{color:#e11d48!important}.text-teal-700{color:#be185d!important}.text-teal-800{color:#9f1239!important}.text-teal-900{color:#881337!important}
+  .border-teal-100{border-color:#ffe4e6!important}.border-teal-200{border-color:#fecdd3!important}.border-teal-300{border-color:#fda4af!important}.border-teal-400{border-color:#fb7185!important}.border-teal-500{border-color:#f43f5e!important}.border-teal-600{border-color:#e11d48!important}.border-teal-700{border-color:#be185d!important}
+  .ring-teal-500{--tw-ring-color:#f43f5e!important}.ring-teal-600{--tw-ring-color:#e11d48!important}
+  .hover\:bg-teal-50:hover{background-color:#fff1f2!important}.hover\:bg-teal-100:hover{background-color:#ffe4e6!important}.hover\:bg-teal-200:hover{background-color:#fecdd3!important}.hover\:bg-teal-300:hover{background-color:#fda4af!important}.hover\:bg-teal-700:hover{background-color:#be185d!important}.hover\:bg-teal-800:hover{background-color:#9f1239!important}
+  .hover\:text-teal-700:hover{color:#be185d!important}.hover\:border-teal-200:hover{border-color:#fecdd3!important}.hover\:border-teal-300:hover{border-color:#fda4af!important}.hover\:border-teal-400:hover{border-color:#fb7185!important}
+  .from-teal-50{--tw-gradient-from:#fff1f2 var(--tw-gradient-from-position)!important;--tw-gradient-to:rgb(255 241 242/0) var(--tw-gradient-to-position)!important;--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)!important}
+  .from-teal-100{--tw-gradient-from:#ffe4e6 var(--tw-gradient-from-position)!important;--tw-gradient-to:rgb(255 228 230/0) var(--tw-gradient-to-position)!important;--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)!important}
+  .from-teal-400{--tw-gradient-from:#fb7185 var(--tw-gradient-from-position)!important;--tw-gradient-to:rgb(251 113 133/0) var(--tw-gradient-to-position)!important;--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)!important}
+  .from-teal-600{--tw-gradient-from:#e11d48 var(--tw-gradient-from-position)!important;--tw-gradient-to:rgb(225 29 72/0) var(--tw-gradient-to-position)!important;--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)!important}
+  .from-teal-700{--tw-gradient-from:#be185d var(--tw-gradient-from-position)!important;--tw-gradient-to:rgb(190 24 93/0) var(--tw-gradient-to-position)!important;--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)!important}
+  .to-teal-50{--tw-gradient-to:#fff1f2 var(--tw-gradient-to-position)!important}.to-teal-100{--tw-gradient-to:#ffe4e6 var(--tw-gradient-to-position)!important}.to-teal-500{--tw-gradient-to:#f43f5e var(--tw-gradient-to-position)!important}.to-teal-700{--tw-gradient-to:#be185d var(--tw-gradient-to-position)!important}
+  .to-cyan-50{--tw-gradient-to:#fff1f2 var(--tw-gradient-to-position)!important}.to-cyan-100{--tw-gradient-to:#ffe4e6 var(--tw-gradient-to-position)!important}.to-cyan-400{--tw-gradient-to:#fb7185 var(--tw-gradient-to-position)!important}.to-cyan-500{--tw-gradient-to:#f43f5e var(--tw-gradient-to-position)!important}.to-cyan-600{--tw-gradient-to:#e11d48 var(--tw-gradient-to-position)!important}
 
   /* Glass effect cho header */
   .glass-header {
@@ -149,7 +164,7 @@
   /* Modern tab chip */
   .tab-chip { border-radius: 12px; padding: 10px 16px; font-weight: 500; font-size: 13px; transition: all 0.25s; white-space: nowrap; }
   .tab-chip:hover { background: #fef3ea; }
-  .tab-chip.active { background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%); color: white; box-shadow: 0 6px 14px -4px rgba(15,118,110,0.3); }
+  .tab-chip.active { background: linear-gradient(135deg, #be185d 0%, #ec4899 100%); color: white; box-shadow: 0 6px 14px -4px rgba(190,24,93,0.3); }
 
   /* Decorative flourish */
   .flourish-underline { position: relative; display: inline-block; }
@@ -784,18 +799,19 @@ const BIEN_PHAP_TU_TU_HINTS = {
 
 // ============== MENU 7 LĨNH VỰC ==============
 const MENU_ITEMS = [
-  { id: 'dashboard', label: 'Tổng quan', icon: 'LayoutDashboard', phase: 1 },
-  { id: 'planning', label: 'Lập kế hoạch', icon: 'CalendarDays', phase: 1 },
-  { id: 'lesson', label: 'Soạn bài', icon: 'BookOpen', phase: 1 },
-  { id: 'exam', label: 'Đánh giá - Kiểm tra', icon: 'FileCheck', phase: 2 },
-  { id: 'classes', label: 'Quản lý các lớp học', icon: 'Users', phase: 4 },
-  { id: 'online', label: '🌐 Lớp Học Online', icon: 'Cloud', phase: 5 },
-  { id: 'library', label: '📚 Thư Viện', icon: 'BookMarked', phase: 4 },
-  { id: 'settings', label: '⚙️ Cài đặt AI', icon: 'Settings', phase: 4 },
-  { id: 'admin', label: 'Công việc hành chính', icon: 'FolderKanban', phase: 5 },
-  { id: 'extra', label: 'Hoạt động ngoại khóa', icon: 'Sparkles', phase: 6 },
-  { id: 'update', label: 'Cập nhật chương trình', icon: 'RefreshCw', phase: 7 },
+  { id: 'online', label: 'Lớp Học Kết Nối', icon: 'Cloud', phase: 5, group: 'pinned' },
+  { id: 'dashboard', label: 'Tổng quan', icon: 'LayoutDashboard', phase: 1, group: 'Tổng quan' },
+  { id: 'planning', label: 'Lập kế hoạch', icon: 'CalendarDays', phase: 1, group: 'Soạn giảng' },
+  { id: 'lesson', label: 'Soạn giáo án', icon: 'BookOpen', phase: 1, group: 'Soạn giảng' },
+  { id: 'exam', label: 'Đánh giá - Kiểm tra', icon: 'FileCheck', phase: 2, group: 'Đánh giá & kiểm tra' },
+  { id: 'classes', label: 'Sổ điểm · Zalo', icon: 'Users', phase: 4, group: 'Hồ sơ & lớp' },
+  { id: 'library', label: 'Thư viện', icon: 'BookMarked', phase: 4, group: 'Tiện ích' },
+  { id: 'admin', label: 'Công việc hành chính', icon: 'FolderKanban', phase: 5, group: 'Tiện ích' },
+  { id: 'extra', label: 'Hoạt động ngoại khóa', icon: 'Sparkles', phase: 6, group: 'Tiện ích' },
+  { id: 'settings', label: 'Cài đặt AI', icon: 'Settings', phase: 4, group: 'Hệ thống' },
+  { id: 'update', label: 'Cập nhật chương trình', icon: 'RefreshCw', phase: 7, group: 'Hệ thống' },
 ];
+const MENU_GROUPS = ['Tổng quan', 'Soạn giảng', 'Đánh giá & kiểm tra', 'Hồ sơ & lớp', 'Tiện ích', 'Hệ thống'];
 
 // ============== HELPER ==============
 const STORAGE_KEY = 'tro_ly_gv_nguvan_thcs_v3';
@@ -1593,26 +1609,34 @@ const Sidebar = ({ active, setActive, collapsed, setCollapsed, onChatOpen, mobil
       <button onClick={() => setCollapsed(!collapsed)} className="p-2 rounded-lg hover:bg-rose-50 text-rose-400 hover:text-rose-600 transition ml-auto"><Icon name="Menu" size={19} /></button>
     </div>
 
-    {/* Navigation */}
+    {/* Navigation — ghim Lớp Học Kết Nối + phân nhóm */}
     <nav className="flex-1 py-2 scrollbar overflow-y-auto relative z-10">
-      {!collapsed && (
-        <p className="px-5 pt-2 pb-1 text-[10px] font-bold uppercase tracking-widest text-rose-300 letter">Menu chính</p>
-      )}
-      {MENU_ITEMS.map(item => (
+      {/* ⭐ Ghim: trung tâm Lớp Học Kết Nối */}
+      {MENU_ITEMS.filter(m => m.group === 'pinned').map(item => (
         <button key={item.id} onClick={() => setActive(item.id)}
-          className={`sidebar-item w-full flex items-center gap-3 px-5 py-3 text-left text-[13.5px] ${active === item.id ? 'active' : ''}`}>
-          <span className={`flex-shrink-0 ${active === item.id ? 'text-rose-700' : 'text-rose-400'}`}>
-            <Icon name={item.icon} size={18} />
-          </span>
-          {!collapsed && (
-            <>
-              <span className="flex-1">{item.label}</span>
-              {item.phase > 4 && <span className="text-[9px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold border border-amber-200">P{item.phase}</span>}
-              {item.phase === 4 && <span className="text-[9px] bg-rose-100 text-rose-600 px-2 py-0.5 rounded-full font-bold border border-rose-200">MỚI</span>}
-              {item.phase === 3 && <span className="text-[9px] bg-teal-50 text-teal-600 px-2 py-0.5 rounded-full font-bold border border-teal-200">3.1</span>}
-            </>
-          )}
+          className={`w-full flex items-center gap-3 ${collapsed ? 'px-0 justify-center' : 'px-4'} py-3 mx-2 my-2 rounded-2xl text-left text-[13.5px] transition`}
+          style={active === item.id
+            ? { background: 'linear-gradient(135deg,#be185d,#ec4899)', color: '#fff', boxShadow: '0 8px 18px -6px rgba(190,24,93,.4)', width: collapsed ? 'auto' : undefined }
+            : { background: 'linear-gradient(135deg,#fff1f5,#ffe4ec)', border: '1px solid #fbcfe8', color: '#9f1239' }}>
+          <Icon name={item.icon} size={20} />
+          {!collapsed && (<><span className="flex-1 font-semibold">{item.label}</span>
+            <span className="text-[9px] px-2 py-0.5 rounded-full font-bold" style={active === item.id ? { background: 'rgba(255,255,255,.25)', color: '#fff' } : { background: '#be185d', color: '#fff' }}>MỚI</span></>)}
         </button>
+      ))}
+      {/* Các nhóm chức năng */}
+      {MENU_GROUPS.map(g => (
+        <div key={g}>
+          {!collapsed && <p className="px-5 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-rose-300">{g}</p>}
+          {MENU_ITEMS.filter(m => m.group === g).map(item => (
+            <button key={item.id} onClick={() => setActive(item.id)}
+              className={`sidebar-item w-full flex items-center gap-3 px-5 py-2.5 text-left text-[13.5px] ${active === item.id ? 'active' : ''}`}>
+              <span className={`flex-shrink-0 ${active === item.id ? 'text-rose-700' : 'text-rose-400'}`}>
+                <Icon name={item.icon} size={18} />
+              </span>
+              {!collapsed && <span className="flex-1">{item.label}</span>}
+            </button>
+          ))}
+        </div>
       ))}
     </nav>
 
@@ -1781,7 +1805,7 @@ const Dashboard = ({ data, setActive }) => {
             <button onClick={() => setActive('exam')}     className="w-full text-left p-3 rounded-xl bg-gradient-to-r from-rose-50 to-pink-50 hover:from-rose-100 hover:to-pink-100 flex items-center gap-3 border border-rose-100"><Icon name="FileCheck" size={18} className="text-rose-700" /><span className="font-medium text-rose-900">Tạo đề kiểm tra</span></button>
             <button onClick={() => setActive('grading')}  className="w-full text-left p-3 rounded-xl bg-gradient-to-r from-rose-50 to-amber-50 hover:from-rose-100 hover:to-amber-100 flex items-center gap-3 border border-rose-100"><Icon name="PenTool" size={18} className="text-rose-700" /><span className="font-medium text-rose-900">Chấm bài + phản hồi</span></button>
             <button onClick={() => setActive('classes')}  className="w-full text-left p-3 rounded-xl bg-gradient-to-r from-teal-50 to-cyan-50 hover:from-teal-100 hover:to-cyan-100 flex items-center gap-3 border border-teal-100"><Icon name="Users" size={18} className="text-teal-700" /><span className="font-medium text-teal-900">🆕 Quản lý lớp học (Zalo)</span></button>
-            <button onClick={() => setActive('online')}   className="w-full text-left p-3 rounded-xl bg-gradient-to-r from-teal-50 to-emerald-50 hover:from-teal-100 hover:to-emerald-100 flex items-center gap-3 border border-teal-200"><Icon name="Cloud" size={18} className="text-teal-700" /><span className="font-medium text-teal-900">🌐 Lớp Học Online <span className="text-[10px] bg-emerald-500 text-white px-1.5 py-0.5 rounded-full align-middle">MỚI</span></span></button>
+            <button onClick={() => setActive('online')}   className="w-full text-left p-3 rounded-xl bg-gradient-to-r from-teal-50 to-emerald-50 hover:from-teal-100 hover:to-emerald-100 flex items-center gap-3 border border-teal-200"><Icon name="Cloud" size={18} className="text-teal-700" /><span className="font-medium text-teal-900">🌐 Lớp Học Kết Nối <span className="text-[10px] bg-emerald-500 text-white px-1.5 py-0.5 rounded-full align-middle">MỚI</span></span></button>
           </div>
         </div>
         <div className="soft-card p-6">
@@ -8817,21 +8841,27 @@ const HamburgerOverlay = ({ active, setActive, onChatOpen, onClose }) => {
   const aiLabel = getUseOllama() ? '🦙 Ollama' : getClaudeApiKey() ? '🤖 Claude' : getGroqApiKey() ? '⚡ Groq' : '❓ Chưa cài AI';
 
   const navGroups = [
-    { label: 'Giảng dạy', items: MENU_ITEMS.filter(m => ['dashboard','planning','lesson','exam'].includes(m.id)) },
-    { label: 'Lớp học', items: MENU_ITEMS.filter(m => ['classes','online','grading'].includes(m.id)) },
-    { label: 'Thư viện & Tiện ích', items: MENU_ITEMS.filter(m => ['library','settings'].includes(m.id)) },
+    { label: 'Lớp học', items: MENU_ITEMS.filter(m => m.id === 'online') },
+    { label: 'Tổng quan', items: MENU_ITEMS.filter(m => m.id === 'dashboard') },
+    { label: 'Soạn giảng', items: MENU_ITEMS.filter(m => m.group === 'Soạn giảng') },
+    { label: 'Đánh giá & kiểm tra', items: MENU_ITEMS.filter(m => m.group === 'Đánh giá & kiểm tra') },
+    { label: 'Hồ sơ & lớp', items: MENU_ITEMS.filter(m => m.group === 'Hồ sơ & lớp') },
+    { label: 'Tiện ích', items: MENU_ITEMS.filter(m => m.group === 'Tiện ích') },
+    { label: 'Hệ thống', items: MENU_ITEMS.filter(m => m.group === 'Hệ thống') },
   ];
 
   const itemColors = {
+    online: 'from-rose-100 to-pink-100 text-rose-700',
     dashboard: 'from-amber-100 to-orange-100 text-amber-700',
-    planning: 'from-teal-100 to-emerald-100 text-teal-700',
+    planning: 'from-rose-100 to-pink-100 text-rose-700',
     lesson: 'from-amber-100 to-yellow-100 text-amber-700',
     exam: 'from-rose-100 to-pink-100 text-rose-700',
-    classes: 'from-teal-100 to-cyan-100 text-teal-700',
-    online: 'from-teal-100 to-emerald-100 text-teal-700',
-    grading: 'from-rose-100 to-amber-100 text-rose-700',
-    library: 'from-teal-50 to-teal-100 text-teal-700',
-    settings: 'from-slate-100 to-slate-200 text-slate-600',
+    classes: 'from-pink-100 to-rose-100 text-rose-700',
+    library: 'from-rose-50 to-pink-100 text-rose-700',
+    admin: 'from-amber-100 to-orange-100 text-amber-700',
+    extra: 'from-pink-100 to-rose-100 text-rose-700',
+    settings: 'from-rose-50 to-slate-100 text-rose-600',
+    update: 'from-amber-50 to-amber-100 text-amber-700',
   };
 
   const handleNav = (id) => { setActive(id); onClose(); };
@@ -9013,14 +9043,14 @@ const OnlineClassTab = ({ fbUser, data, setActive }) => {
       setClasses(s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.grade-b.grade)||(a.name>b.name?1:-1))));
     return un;
   }, [fbUser]);
-  if (!fbUser) return <div className="fade-in max-w-xl mx-auto p-6"><div className="soft-card p-8 text-center"><div className="text-4xl mb-3">☁️</div><p className="text-slate-600 mb-2">Cần đăng nhập đám mây để dùng Lớp Học Online.</p><button onClick={()=>setActive('settings')} className="btn-primary mt-2">Vào Cài đặt / Đăng nhập</button></div></div>;
+  if (!fbUser) return <div className="fade-in max-w-xl mx-auto p-6"><div className="soft-card p-8 text-center"><div className="text-4xl mb-3">☁️</div><p className="text-slate-600 mb-2">Cần đăng nhập đám mây để dùng Lớp Học Kết Nối.</p><button onClick={()=>setActive('settings')} className="btn-primary mt-2">Vào Cài đặt / Đăng nhập</button></div></div>;
   if (open) return <OcClassDetail cls={open} fbUser={fbUser} data={data} onBack={()=>setOpen(null)} />;
   const byGrade = {}; classes.forEach(c=>{(byGrade[c.grade]=byGrade[c.grade]||[]).push(c);});
   return (
     <div className="fade-in max-w-4xl mx-auto">
-      <Breadcrumb onHome={()=>setActive('dashboard')} items={[{label:'Lớp Học Online', icon:'Cloud'}]} />
+      <Breadcrumb onHome={()=>setActive('dashboard')} items={[{label:'Lớp Học Kết Nối', icon:'Cloud'}]} />
       <div className="cream-card p-6 mb-5 flex items-center justify-between flex-wrap gap-3">
-        <div><h1 className="text-2xl font-bold font-display">🌐 Lớp Học Online</h1><p className="text-slate-600 text-sm mt-1">Tạo lớp · giao đề · nhận bài · AI chấm · gửi điểm cho học sinh 🌸</p></div>
+        <div><h1 className="text-2xl font-bold font-display">🌐 Lớp Học Kết Nối</h1><p className="text-slate-600 text-sm mt-1">Tạo lớp · giao đề · nhận bài · AI chấm · gửi điểm cho học sinh 🌸</p></div>
         <button onClick={()=>setShowNew(true)} className="btn-primary flex items-center gap-2"><Icon name="Plus" size={18}/> Tạo lớp</button>
       </div>
       <div className="bg-teal-50 border border-teal-100 rounded-xl p-3 text-sm text-teal-800 mb-5">💡 Học sinh/phụ huynh vào lớp tại <b>trolygiaovien.netlify.app/cong</b> bằng <b>mã lớp</b> cô tạo bên dưới.</div>
