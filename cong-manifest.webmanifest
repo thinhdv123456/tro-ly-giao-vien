@@ -1,0 +1,15 @@
+{
+  "name": "Cổng Lớp Học – Trợ Lý Giáo Viên",
+  "short_name": "Lớp Học",
+  "description": "Vào lớp, làm bài có giờ, xem điểm và trò chuyện với cô giáo.",
+  "lang": "vi",
+  "start_url": "/cong",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fdfaf6",
+  "theme_color": "#0f766e",
+  "icons": [
+    { "src": "/cong-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
