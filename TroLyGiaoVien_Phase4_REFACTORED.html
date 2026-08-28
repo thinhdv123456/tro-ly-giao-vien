@@ -1922,63 +1922,54 @@ const Header = ({ selectedClass, setSelectedClass, selectedBook, setSelectedBook
 };
 
 // ============== DASHBOARD (Bảng điều khiển Lớp Học Kết Nối) ==============
-const Dashboard = ({ data, setActive }) => {
-  const classes     = data.classes     || [];
-  const assignments = data.assignments || [];
-  const submissions = data.submissions || [];
-  const zaloSubs    = data.zaloSubmissions || [];
+const Dashboard = ({ data, setData, setActive, fbUser }) => {
+  const plans    = data.plans    || [];
+  const lessons  = data.lessons  || [];
+  const exams    = data.exams    || [];
+  const gradings = data.gradings || [];
 
-  // KPIs tổng quan
-  const activeAssignments = assignments.filter(a => a.status !== 'closed');
-  const pendingGrade  = submissions.filter(s => s.content && !s.gradedAt && !s.score);
-  const unreadMsgs    = zaloSubs.filter(z => !z.readAt && z.status !== 'replied');
-  const dueSoon       = activeAssignments.filter(a => {
-    if (!a.dueDate) return false;
-    const diff = (new Date(a.dueDate) - new Date()) / 864e5;
-    return diff >= 0 && diff <= 2;
-  });
+  // Firebase classes + per-class stats
+  const [fbClasses, setFbClasses] = useState([]);
+  const [clsStats, setClsStats] = useState({});
+  const [loading, setLoading] = useState(true);
 
-  // Stats cho từng lớp
-  const clsStat = (cls) => {
-    const asgn  = activeAssignments.filter(a => a.classId === cls.id);
-    const subs  = submissions.filter(s => s.classId === cls.id);
-    const pend  = subs.filter(s => s.content && !s.gradedAt && !s.score);
-    const msgs  = zaloSubs.filter(z => z.classId === cls.id && !z.readAt);
-    const sub   = subs.filter(s => s.content).length;
-    const total = cls.students?.length || 0;
-    const hasDue = asgn.some(a => { const d=(new Date(a.dueDate)-new Date())/864e5; return d>=0&&d<=2; });
-    return { asgn: asgn.length, sub, total, pend: pend.length, msgs: msgs.length, hasDue, pct: total > 0 ? sub/total : 0 };
-  };
+  useEffect(() => {
+    if (!fbReady || !fbUser) { setLoading(false); return; }
+    const un = fbDb.collection('classes').where('teacherUid','==',fbUser.uid).onSnapshot(snap => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (a.grade - b.grade) || (a.name > b.name ? 1 : -1));
+      setFbClasses(list);
+      setLoading(false);
+      list.forEach(cls => {
+        const cid = cls.id;
+        const subsUn = fbDb.collection('classes').doc(cid).collection('submissions').onSnapshot(subSnap => {
+          const pending = subSnap.docs.filter(d => d.data().status === 'submitted').length;
+          const graded = subSnap.docs.filter(d => d.data().status === 'released').length;
+          setClsStats(prev => ({ ...prev, [cid]: { ...prev[cid], pending, graded, totalSubs: pending + graded } }));
+        });
+        const asgUn = fbDb.collection('classes').doc(cid).collection('assignments').onSnapshot(asgSnap => {
+          const asgs = asgSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          const hasDue = asgs.some(a => { const d = (a.deadline - Date.now()) / 864e5; return d >= 0 && d <= 2; });
+          setClsStats(prev => ({ ...prev, [cid]: { ...prev[cid], asgs: asgs.length, hasDue } }));
+        });
+        const msgUn = fbDb.collection('classes').doc(cid).collection('messages').where('fromRole','==','student').onSnapshot(msgSnap => {
+          setClsStats(prev => ({ ...prev, [cid]: { ...prev[cid], msgs: msgSnap.size } }));
+        });
+      });
+    });
+    return un;
+  }, [fbUser]);
+
+  const totalPending = fbClasses.reduce((s, c) => s + (clsStats[c.id]?.pending || 0), 0);
+  const totalAsgs    = fbClasses.reduce((s, c) => s + (clsStats[c.id]?.asgs || 0), 0);
+  const totalMsgs    = fbClasses.reduce((s, c) => s + (clsStats[c.id]?.msgs || 0), 0);
+  const dueSoonCount = fbClasses.filter(c => clsStats[c.id]?.hasDue).length;
 
   const now = new Date();
-  const days = ['Chủ nhật','Thứ hai','Thứ ba','Thứ tư','Thứ năm','Thứ sáu','Thứ bảy'];
-  const dateStr = `${days[now.getDay()]}, ${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()}`;
+  const dayNames = ['Chủ nhật','Thứ hai','Thứ ba','Thứ tư','Thứ năm','Thứ sáu','Thứ bảy'];
+  const dateStr = `${dayNames[now.getDay()]}, ${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()}`;
 
-  // Hoạt động gần đây
-  const recentActivity = [
-    ...submissions.filter(s => s.content && s.submittedAt).map(s => ({
-      icon: s.images?.length > 0 ? '📷' : '📄',
-      text: `${s.studentName||'HS'} đã nộp "${(s.assignmentTitle||'bài').slice(0,18)}"`,
-      time: s.submittedAt
-    })),
-    ...zaloSubs.map(z => ({
-      icon: '💬',
-      text: `${z.studentName||'PH'}: "${(z.content||'').slice(0,22)}..."`,
-      time: z.timestamp
-    })),
-  ].sort((a,b) => new Date(b.time||0) - new Date(a.time||0)).slice(0,6);
-
-  const fmtTime = (t) => {
-    if (!t) return '';
-    const d = new Date(t), now2 = new Date();
-    const diffM = Math.round((now2 - d) / 6e4);
-    if (diffM < 60) return `${diffM}\'`;
-    if (diffM < 1440) return `${Math.round(diffM/60)} giờ`;
-    return `${Math.round(diffM/1440)} ngày`;
-  };
-
-  // Empty state khi chưa có lớp
-  if (classes.length === 0) return (
+  // Chưa đăng nhập hoặc chưa có lớp
+  if (!fbUser || (fbClasses.length === 0 && !loading)) return (
     <div className="fade-in">
       <div className="flex items-center gap-4 mb-6">
         <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl text-white shadow"
@@ -1988,15 +1979,28 @@ const Dashboard = ({ data, setActive }) => {
           <p className="text-xs" style={{color:'#8a5a68'}}>Chào cô Thu · {dateStr}</p>
         </div>
       </div>
-      <div className="soft-card p-12 text-center">
-        <div className="text-5xl mb-4">🏫</div>
-        <h3 className="text-lg font-bold text-rose-900 mb-2 font-display">Chưa có lớp học nào</h3>
-        <p className="text-sm mb-5" style={{color:'#8a5a68'}}>Thêm lớp học để bảng điều khiển hiện số liệu thật</p>
-        <button onClick={() => setActive('classes')} className="btn-primary px-6 py-2.5 rounded-xl font-medium text-sm">
-          ＋ Thêm lớp đầu tiên
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        {[
+          { label: 'Kế hoạch bài dạy', val: plans.length, icon: '📋' },
+          { label: 'Giáo án', val: lessons.length, icon: '📖' },
+          { label: 'Đề kiểm tra', val: exams.length, icon: '📝' },
+          { label: 'Bài đã chấm', val: gradings.length, icon: '✅' },
+        ].map((k,i) => (
+          <div key={i} className="soft-card p-4">
+            <p className="text-xs" style={{color:'#8a5a68'}}>{k.icon} {k.label}</p>
+            <p className="text-2xl font-bold font-display mt-1" style={{color:'#4a2530'}}>{k.val}</p>
+          </div>
+        ))}
+      </div>
+      <div className="soft-card p-8 text-center mb-4" style={{borderColor:'#f7c9dc'}}>
+        <div className="text-4xl mb-3">🏫</div>
+        <h3 className="text-lg font-bold text-rose-900 mb-2 font-display">{!fbUser ? 'Đăng nhập để xem lớp' : 'Chưa có lớp học nào'}</h3>
+        <p className="text-sm mb-5" style={{color:'#8a5a68'}}>{!fbUser ? 'Vào Cài đặt → Đăng nhập đám mây để hiện các lớp của cô' : 'Tạo lớp trong Lớp Học Kết Nối để bảng điều khiển hiện số liệu thật'}</p>
+        <button onClick={() => setActive(!fbUser ? 'settings' : 'online')} className="btn-primary px-6 py-2.5 rounded-xl font-medium text-sm">
+          {!fbUser ? '🔐 Đăng nhập' : '＋ Tạo lớp đầu tiên'}
         </button>
       </div>
-      <div className="mt-4 grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <button onClick={() => setActive('planning')} className="soft-card p-4 flex items-center gap-3 text-left hover:scale-[1.02] transition cursor-pointer">
           <Icon name="CalendarDays" size={20} className="text-rose-400" />
           <span className="text-sm font-medium text-rose-900">Lập kế hoạch bài dạy</span>
@@ -2006,6 +2010,12 @@ const Dashboard = ({ data, setActive }) => {
           <span className="text-sm font-medium text-rose-900">Tạo đề kiểm tra</span>
         </button>
       </div>
+    </div>
+  );
+
+  if (loading) return (
+    <div className="fade-in flex items-center justify-center py-20">
+      <div className="text-center"><div className="text-4xl mb-3 animate-pulse">🌸</div><p className="text-sm" style={{color:'#8a5a68'}}>Đang tải bảng điều khiển...</p></div>
     </div>
   );
 
@@ -2019,19 +2029,19 @@ const Dashboard = ({ data, setActive }) => {
           <h1 className="text-xl md:text-2xl font-bold font-display" style={{color:'#9f1239'}}>Lớp Học Kết Nối</h1>
           <p className="text-xs" style={{color:'#8a5a68'}}>Chào cô Thu · {dateStr}</p>
         </div>
-        <button onClick={() => setActive('classes')}
+        <button onClick={() => setActive('online')}
           className="ml-auto btn-primary px-4 py-2 rounded-xl text-sm font-medium hidden sm:flex items-center gap-1">
           ＋ Giao bài mới
         </button>
       </div>
 
-      {/* 4 KPI */}
+      {/* 4 KPI — từ Firebase */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         {[
-          { label: 'Lớp đang dạy', val: classes.length, accent: false },
-          { label: 'Bài đang giao', val: activeAssignments.length, accent: false },
-          { label: 'Bài chờ chấm', val: pendingGrade.length, accent: pendingGrade.length > 0, color: '#be185d' },
-          { label: 'Tin nhắn mới',  val: unreadMsgs.length, accent: unreadMsgs.length > 0, color: '#d97706' },
+          { label: 'Lớp đang dạy', val: fbClasses.length, accent: false },
+          { label: 'Bài đang giao', val: totalAsgs, accent: false },
+          { label: 'Bài chờ chấm', val: totalPending, accent: totalPending > 0, color: '#be185d' },
+          { label: 'Tin nhắn mới',  val: totalMsgs, accent: totalMsgs > 0, color: '#d97706' },
         ].map((k,i) => (
           <div key={i} className="soft-card p-4" style={k.accent ? {borderColor:'#f7c9dc'} : {}}>
             <p className="text-xs" style={{color: k.accent ? k.color : '#8a5a68'}}>{k.label}</p>
@@ -2041,75 +2051,83 @@ const Dashboard = ({ data, setActive }) => {
       </div>
 
       {/* Cần xử lý ngay */}
-      {(pendingGrade.length > 0 || unreadMsgs.length > 0 || dueSoon.length > 0) && (
+      {(totalPending > 0 || totalMsgs > 0 || dueSoonCount > 0) && (
         <div className="soft-card p-4 mb-4" style={{borderColor:'#f7c9dc'}}>
           <p className="font-semibold text-sm mb-1 flex items-center gap-2 text-rose-700">⚠️ Cần xử lý ngay</p>
-          {pendingGrade.length > 0 && (
+          {totalPending > 0 && (
             <div className="flex items-center justify-between gap-3 py-2.5 border-t border-rose-100">
-              <span className="text-sm">📝 <b>{pendingGrade.length} bài</b> đang chờ cô chấm điểm</span>
-              <button onClick={() => setActive('classes')} className="btn-primary px-3 py-1.5 rounded-xl text-xs font-medium flex-shrink-0">Chấm ngay</button>
+              <span className="text-sm">📝 <b>{totalPending} bài</b> đang chờ cô chấm điểm</span>
+              <button onClick={() => setActive('online')} className="btn-primary px-3 py-1.5 rounded-xl text-xs font-medium flex-shrink-0">Chấm ngay</button>
             </div>
           )}
-          {unreadMsgs.length > 0 && (
+          {totalMsgs > 0 && (
             <div className="flex items-center justify-between gap-3 py-2.5 border-t border-rose-100">
-              <span className="text-sm">💬 <b>{unreadMsgs.length} tin nhắn</b> phụ huynh chưa trả lời</span>
-              <button onClick={() => setActive('classes')} className="px-3 py-1.5 rounded-xl text-xs font-medium border border-rose-200 text-rose-700 flex-shrink-0">Trả lời</button>
+              <span className="text-sm">💬 <b>{totalMsgs} tin nhắn</b> chưa trả lời</span>
+              <button onClick={() => setActive('online')} className="px-3 py-1.5 rounded-xl text-xs font-medium border border-rose-200 text-rose-700 flex-shrink-0">Trả lời</button>
             </div>
           )}
-          {dueSoon.length > 0 && (
+          {dueSoonCount > 0 && (
             <div className="flex items-center justify-between gap-3 py-2.5 border-t border-rose-100">
-              <span className="text-sm">⏰ <b>{dueSoon.length} bài</b> sắp hết hạn nộp</span>
-              <button onClick={() => setActive('classes')} className="px-3 py-1.5 rounded-xl text-xs font-medium border border-rose-200 text-rose-700 flex-shrink-0">Xem</button>
+              <span className="text-sm">⏰ <b>{dueSoonCount} lớp</b> có bài sắp hết hạn nộp</span>
+              <button onClick={() => setActive('online')} className="px-3 py-1.5 rounded-xl text-xs font-medium border border-rose-200 text-rose-700 flex-shrink-0">Xem</button>
             </div>
           )}
         </div>
       )}
 
-      {/* Lớp học + Hoạt động */}
+      {/* Lớp học + Bắt đầu nhanh */}
       <div className="grid lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2">
           <p className="font-semibold mb-3 text-rose-900">Các lớp của cô</p>
           <div className="grid sm:grid-cols-2 gap-3">
-            {classes.map(cls => {
-              const st = clsStat(cls);
-              const abbr = (cls.name||'').replace(/[^0-9A-Za-zÀ-ỹ]/g,'').slice(0,2).toUpperCase() || String(cls.grade||'?');
+            {fbClasses.map(cls => {
+              const st = clsStats[cls.id] || {};
+              const students = (cls.students || []).length;
+              const pend = st.pending || 0;
+              const asgs = st.asgs || 0;
+              const msgs = st.msgs || 0;
+              const totalSubs = st.totalSubs || 0;
+              const pct = students > 0 ? totalSubs / students : 0;
+              const abbr = (cls.name||'').replace(/[^0-9A-Za-zÀ-ỹ]/g,'').slice(0,3).toUpperCase() || String(cls.grade||'?');
               return (
                 <div key={cls.id} className="soft-card p-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2.5">
                       <div className="w-10 h-10 rounded-xl flex items-center justify-center font-semibold text-sm"
-                        style={{background:'rgba(190,24,93,.12)',color:'#be185d'}}>{abbr}</div>
+                        style={{background: st.hasDue ? 'rgba(217,119,6,.14)' : 'rgba(190,24,93,.12)', color: st.hasDue ? '#d97706' : '#be185d'}}>{abbr}</div>
                       <div>
                         <p className="font-semibold text-sm text-rose-900">{cls.name || `Lớp ${cls.grade}`}</p>
-                        <p className="text-[11px]" style={{color:'#8a5a68'}}>{st.total} học sinh</p>
+                        <p className="text-[11px]" style={{color:'#8a5a68'}}>{students} học sinh</p>
                       </div>
                     </div>
                     {st.hasDue
                       ? <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">⏰ sắp hết hạn</span>
-                      : st.msgs > 0
-                      ? <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-rose-50 text-rose-600">💬 {st.msgs} mới</span>
-                      : <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">✓ xong</span>}
+                      : msgs > 0
+                      ? <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-rose-50 text-rose-600">💬 {msgs} mới</span>
+                      : pend === 0
+                      ? <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">✓ xong</span>
+                      : null}
                   </div>
                   <div className="flex justify-between text-[11px] mb-1">
                     <span style={{color:'#8a5a68'}}>Tiến độ nộp</span>
-                    <span className="font-semibold text-rose-900">{st.sub}/{st.total}</span>
+                    <span className="font-semibold text-rose-900">{totalSubs}/{students}</span>
                   </div>
                   <div className="h-2 rounded-full overflow-hidden" style={{background:'rgba(190,24,93,.1)'}}>
                     <div className="h-full rounded-full transition-all"
-                      style={{width:`${Math.round(st.pct*100)}%`, background:'linear-gradient(90deg,#be185d,#ec4899)'}} />
+                      style={{width:`${Math.min(Math.round(pct*100),100)}%`, background: st.hasDue ? 'linear-gradient(90deg,#d97706,#f59e0b)' : 'linear-gradient(90deg,#be185d,#ec4899)'}} />
                   </div>
                   <div className="flex gap-1.5 flex-wrap my-2.5">
-                    {st.asgn > 0 && <span className="text-[11px] px-2 py-0.5 rounded-full" style={{background:'rgba(190,24,93,.08)',color:'#be185d'}}>📋 {st.asgn} đang giao</span>}
-                    {st.pend > 0
-                      ? <span className="text-[11px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-medium">✅ {st.pend} chờ chấm</span>
-                      : st.asgn > 0 && <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">✓ đã chấm hết</span>}
+                    {asgs > 0 && <span className="text-[11px] px-2 py-0.5 rounded-full" style={{background:'rgba(190,24,93,.08)',color:'#be185d'}}>📋 {asgs} đang giao</span>}
+                    {pend > 0
+                      ? <span className="text-[11px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-medium">✅ {pend} chờ chấm</span>
+                      : asgs > 0 && <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">✓ đã chấm hết</span>}
                   </div>
                   <div className="flex gap-2">
-                    {st.pend > 0
-                      ? <button onClick={() => setActive('classes')} className="btn-primary flex-1 py-2 rounded-xl text-xs font-medium">Chấm bài</button>
-                      : <button onClick={() => setActive('classes')} className="flex-1 py-2 rounded-xl text-xs font-medium border text-rose-700 hover:bg-rose-50 transition" style={{borderColor:'#f0dcd0'}}>Xem lớp</button>}
-                    <button onClick={() => setActive('classes')} className="flex-1 py-2 rounded-xl text-xs font-medium border text-rose-700 hover:bg-rose-50 transition" style={{borderColor:'#f0dcd0'}}>Giao bài</button>
-                    <button onClick={() => setActive('classes')} className="flex-1 py-2 rounded-xl text-xs font-medium border text-rose-700 hover:bg-rose-50 transition" style={{borderColor:'#f0dcd0'}}>Nhắn lớp</button>
+                    {pend > 0
+                      ? <button onClick={() => setActive('online')} className="btn-primary flex-1 py-2 rounded-xl text-xs font-medium">Chấm bài</button>
+                      : <button onClick={() => setActive('online')} className="flex-1 py-2 rounded-xl text-xs font-medium border text-rose-700 hover:bg-rose-50 transition" style={{borderColor:'#f0dcd0'}}>Xem lớp</button>}
+                    <button onClick={() => setActive('online')} className="flex-1 py-2 rounded-xl text-xs font-medium border text-rose-700 hover:bg-rose-50 transition" style={{borderColor:'#f0dcd0'}}>Giao bài</button>
+                    <button onClick={() => setActive('online')} className="flex-1 py-2 rounded-xl text-xs font-medium border text-rose-700 hover:bg-rose-50 transition" style={{borderColor:'#f0dcd0'}}>Nhắn lớp</button>
                   </div>
                 </div>
               );
@@ -2118,22 +2136,12 @@ const Dashboard = ({ data, setActive }) => {
         </div>
 
         <div>
-          <p className="font-semibold mb-3 text-rose-900">Hoạt động gần đây</p>
-          <div className="soft-card p-1.5 mb-4">
-            {recentActivity.length > 0 ? recentActivity.map((item, i) => (
-              <div key={i} className={`flex items-start gap-3 px-3 py-3 text-sm ${i>0?'border-t border-rose-50':''}`}>
-                <span className="text-base leading-tight">{item.icon}</span>
-                <span className="flex-1 text-xs text-rose-900 leading-relaxed">{item.text}</span>
-                <span className="text-[10px] whitespace-nowrap flex-shrink-0" style={{color:'#8a5a68'}}>{fmtTime(item.time)}</span>
-              </div>
-            )) : (
-              <div className="py-8 text-center">
-                <p className="text-sm" style={{color:'#d4aab8'}}>Chưa có hoạt động</p>
-                <p className="text-xs mt-1" style={{color:'#e8c8d4'}}>Giao bài để xem tiến độ</p>
-              </div>
-            )}
-          </div>
+          <p className="font-semibold mb-3 text-rose-900">Bắt đầu nhanh</p>
           <div className="space-y-2">
+            <button onClick={() => setActive('online')} className="w-full text-left px-4 py-3 rounded-xl border hover:bg-rose-50 flex items-center gap-3 text-sm transition" style={{borderColor:'#f0dcd0'}}>
+              <Icon name="Globe" size={16} className="text-rose-400 flex-shrink-0" />
+              <span className="text-rose-800">Quản lý Lớp Học Kết Nối</span>
+            </button>
             <button onClick={() => setActive('planning')} className="w-full text-left px-4 py-3 rounded-xl border hover:bg-rose-50 flex items-center gap-3 text-sm transition" style={{borderColor:'#f0dcd0'}}>
               <Icon name="CalendarDays" size={16} className="text-rose-400 flex-shrink-0" />
               <span className="text-rose-800">Soạn kế hoạch bài dạy</span>
@@ -9640,7 +9648,7 @@ const App = () => {
   };
 
   const renderContent = () => {
-    if (active === 'dashboard') return <Dashboard data={data} setActive={setActive} />;
+    if (active === 'dashboard') return <Dashboard data={data} setData={setData} setActive={setActive} fbUser={fbUser} />;
     if (active === 'planning') return <PlanningTab data={data} setData={setData} selectedClass={selectedClass} selectedBook={selectedBook} teacherName={teacherName} schoolName={schoolName} setActive={handleNavAndClose} />;
     if (active === 'lesson') return <LessonTab data={data} setData={setData} selectedClass={selectedClass} selectedBook={selectedBook} teacherName={teacherName} schoolName={schoolName} setActive={handleNavAndClose} />;
     if (active === 'exam') return <ExamTab data={data} setData={setData} selectedClass={selectedClass} selectedBook={selectedBook} teacherName={teacherName} schoolName={schoolName} setActive={handleNavAndClose} />;
