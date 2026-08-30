@@ -16,7 +16,7 @@ from http.server import ThreadingHTTPServer
 
 PORT = 8765
 # Model Claude mặc định cho tác vụ nặng (chấm bài, sinh đề...). Có thể đổi ở app.
-CLAUDE_MODEL_DEFAULT = "claude-opus-4-8"
+CLAUDE_MODEL_DEFAULT = "claude-sonnet-5"
 CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE, "DuLieu")

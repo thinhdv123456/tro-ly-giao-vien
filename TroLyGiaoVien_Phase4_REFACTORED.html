@@ -1166,7 +1166,7 @@ const getGroqApiKey = () => (localStorage.getItem('groq_api_key') || '').trim();
 const saveGroqApiKey = (key) => localStorage.setItem('groq_api_key', (key || '').trim());
 const getClaudeApiKey = () => (localStorage.getItem('claude_api_key') || '').trim();
 const saveClaudeApiKey = (key) => localStorage.setItem('claude_api_key', (key || '').trim());
-const CLAUDE_MODEL = 'claude-opus-4-8'; // model Claude cho tác vụ nặng
+const CLAUDE_MODEL = 'claude-sonnet-5'; // model Claude cho tác vụ nặng
 const getOllamaUrl = () => localStorage.getItem('ollama_url') || 'http://localhost:11434';
 const saveOllamaUrl = (url) => localStorage.setItem('ollama_url', url);
 const getUseOllama = () => localStorage.getItem('use_ollama') === 'true';
@@ -8877,15 +8877,15 @@ const SettingsTab = ({ data, setData, setActive, onRestoreData, fbUser, onSignOu
               </div>
               <div className="flex justify-between">
                 <span>📝 Mô hình:</span>
-                <span className="font-mono">claude-opus-4-8</span>
+                <span className="font-mono">claude-sonnet-5</span>
               </div>
               <div className="flex justify-between">
                 <span>💬 Input price:</span>
-                <span>$5 / 1M</span>
+                <span>$3 / 1M</span>
               </div>
               <div className="flex justify-between">
                 <span>📤 Output price:</span>
-                <span>$25 / 1M</span>
+                <span>$15 / 1M</span>
               </div>
             </div>
             <div className="mt-3 p-2 bg-amber-50 rounded text-xs text-amber-800 border border-amber-200">
