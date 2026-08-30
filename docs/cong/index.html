@@ -210,6 +210,35 @@ const fileToDataURL = (file, maxW = 1000, q = 0.72) => new Promise((res, rej) =>
   };
   rd.readAsDataURL(file);
 });
+// 🔍 Kiểm tra ảnh có bị mờ không — dùng phương sai Laplacian (đo độ "sắc nét" của ảnh, kỹ thuật
+// xử lý ảnh phổ biến): ảnh nét có nhiều cạnh rõ -> phương sai cao; ảnh mờ -> phương sai thấp.
+// Trả về true nếu ảnh có vẻ mờ (chỉ mang tính gợi ý, không tuyệt đối chính xác).
+const isImageBlurry = (dataUrl) => new Promise((resolve) => {
+  const img = new Image();
+  img.onload = () => {
+    try {
+      const w = 220, h = Math.max(1, Math.round(220 * img.height / img.width));
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+      const ctx = cv.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
+      const data = ctx.getImageData(0, 0, w, h).data;
+      const gray = new Float32Array(w * h);
+      for (let i = 0; i < w * h; i++) { const o = i * 4; gray[i] = 0.299 * data[o] + 0.587 * data[o + 1] + 0.114 * data[o + 2]; }
+      let sum = 0, sumSq = 0, n = 0;
+      for (let y = 1; y < h - 1; y++) {
+        for (let x = 1; x < w - 1; x++) {
+          const i = y * w + x;
+          const lap = gray[i - 1] + gray[i + 1] + gray[i - w] + gray[i + w] - 4 * gray[i];
+          sum += lap; sumSq += lap * lap; n++;
+        }
+      }
+      const mean = sum / n;
+      const variance = sumSq / n - mean * mean;
+      resolve(variance < 55); // ngưỡng kinh nghiệm — thấp hơn -> nghi ngờ mờ
+    } catch (e) { resolve(false); } // lỗi xử lý -> không chặn học sinh
+  };
+  img.onerror = () => resolve(false);
+  img.src = dataUrl;
+});
 // Vẽ icon app (nền gradient teal→rose + chữ tên lớp, vd "6A") → data URL PNG.
 const makeIconPNG = (label, size) => {
   const cv = document.createElement('canvas'); cv.width = size; cv.height = size;
@@ -477,6 +506,7 @@ const ClassDetail = ({ cls, user, onBack }) => {
   const [tab, setTab] = useState('assign');
   const [assignments, setAssignments] = useState([]);
   const [showNew, setShowNew] = useState(false);
+  const [showNewMat, setShowNewMat] = useState(false);
   const [openAsg, setOpenAsg] = useState(null);
   useEffect(() => {
     const un = db.collection('classes').doc(cls.id).collection('assignments').onSnapshot(s =>
@@ -491,20 +521,23 @@ const ClassDetail = ({ cls, user, onBack }) => {
         <div className="flex-1"><p className="font-semibold">Lớp {cls.name}</p><p className="text-[11px] text-teal-100">Mã vào lớp: <b className="tracking-widest">{cls.id}</b></p></div>
         <button onClick={() => { navigator.clipboard.writeText(cls.id); alert('Đã copy mã lớp: ' + cls.id + '\nGửi mã này cho học sinh để vào lớp.'); }} className="text-xs bg-white/15 px-3 py-1.5 rounded-lg">Copy mã</button>
       </div>
-      <div className="flex border-b bg-white sticky top-[60px] z-10 text-sm">
-        {[['assign', '📝 Bài tập'], ['msg', '📢 Thông báo'], ['hs', '👥 Học sinh']].map(([k, l]) =>
-          <button key={k} onClick={() => setTab(k)} className={`flex-1 py-3 font-medium ${tab === k ? 'text-teal-700 border-b-2 border-teal-600' : 'text-slate-500'}`}>{l}</button>)}
+      <div className="flex border-b bg-white sticky top-[60px] z-10 text-sm overflow-x-auto">
+        {[['assign', '📝 Bài tập'], ['tailieu', '📚 Tài liệu'], ['msg', '📢 Thông báo'], ['hs', '👥 Học sinh']].map(([k, l]) =>
+          <button key={k} onClick={() => setTab(k)} className={`flex-1 py-3 font-medium whitespace-nowrap px-2 ${tab === k ? 'text-teal-700 border-b-2 border-teal-600' : 'text-slate-500'}`}>{l}</button>)}
       </div>
       <div className="max-w-2xl mx-auto p-4">
         {tab === 'assign' && <>
           {assignments.length === 0 && <p className="text-center text-slate-400 py-8">Chưa giao bài nào. Bấm nút bên dưới để giao bài đầu tiên.</p>}
           {assignments.map(a => <AsgRow key={a.id} cls={cls} asg={a} onOpen={() => setOpenAsg(a)} />)}
         </>}
+        {tab === 'tailieu' && <MaterialsView cls={cls} />}
         {tab === 'msg' && <MessagesView cls={cls} sender={{ role: 'teacher', name: 'Cô ' + (cls.teacherName || '') }} />}
         {tab === 'hs' && <StudentsView cls={cls} />}
       </div>
       {tab === 'assign' && <button onClick={() => setShowNew(true)} className="btn-rose fixed bottom-6 right-6 px-5 py-3 rounded-full font-semibold shadow-lg">＋ Giao bài</button>}
+      {tab === 'tailieu' && <button onClick={() => setShowNewMat(true)} className="btn-teal fixed bottom-6 right-6 px-5 py-3 rounded-full font-semibold shadow-lg">＋ Thêm tài liệu</button>}
       {showNew && <NewAssignmentModal cls={cls} user={user} onClose={() => setShowNew(false)} />}
+      {showNewMat && <NewMaterialModal cls={cls} user={user} onClose={() => setShowNewMat(false)} />}
     </div>
   );
 };
@@ -521,10 +554,11 @@ const AsgRow = ({ cls, asg, onOpen }) => {
   return (
     <button onClick={onOpen} className="card p-4 w-full text-left mb-3 hover:shadow-md transition">
       <div className="flex items-start justify-between gap-2">
-        <div><p className="font-semibold text-teal-900">{asg.title}</p><p className="text-xs text-slate-500 mt-0.5">⏱ {asg.durationMin} phút · Hạn {fmtDate(asg.deadline)}</p></div>
+        <div><p className="font-semibold text-teal-900">{asg.kind === 'kiemtra' ? '🧪 ' : ''}{asg.title}</p><p className="text-xs text-slate-500 mt-0.5">⏱ {asg.durationMin} phút · Hạn {fmtDate(asg.deadline)}</p></div>
         {expired ? <Badge tone="gray">Đã đóng</Badge> : <Badge tone="green">Đang mở</Badge>}
       </div>
       <div className="mt-2 flex gap-2">
+        {asg.kind === 'kiemtra' && <Badge tone="rose">Thi &amp; Kiểm tra</Badge>}
         <Badge tone="teal">{subs.total} bài nộp</Badge>
         {subs.pending > 0 && <Badge tone="rose">{subs.pending} chờ chấm</Badge>}
       </div>
@@ -534,15 +568,21 @@ const AsgRow = ({ cls, asg, onOpen }) => {
 const NewAssignmentModal = ({ cls, user, onClose }) => {
   const [title, setTitle] = useState(''); const [body, setBody] = useState(''); const [dur, setDur] = useState(45);
   const [days, setDays] = useState(1); const [busy, setBusy] = useState(false);
+  const [kind, setKind] = useState('baitap'); // 'baitap' | 'kiemtra' — quyết định HS thấy ở tab nào
   const create = async () => {
     if (!title.trim() || !body.trim()) { alert('Nhập tiêu đề và nội dung đề.'); return; }
     setBusy(true);
     const deadline = Date.now() + Number(days) * 86400000;
-    await db.collection('classes').doc(cls.id).collection('assignments').add({ title: title.trim(), body: body.trim(), durationMin: Number(dur), deadline, createdAt: Date.now(), createdBy: user.uid });
+    await db.collection('classes').doc(cls.id).collection('assignments').add({ title: title.trim(), body: body.trim(), durationMin: Number(dur), deadline, kind, createdAt: Date.now(), createdBy: user.uid });
     setBusy(false); onClose();
   };
   return (
     <Modal onClose={onClose} title="Giao bài tập">
+      <label className="block text-sm font-medium mb-1">Loại</label>
+      <div className="flex gap-2 mb-3">
+        <button type="button" onClick={() => setKind('baitap')} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 ${kind === 'baitap' ? 'bg-teal-600 border-teal-600 text-white' : 'border-slate-200 text-slate-500'}`}>📝 Bài tập</button>
+        <button type="button" onClick={() => setKind('kiemtra')} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 ${kind === 'kiemtra' ? 'bg-rose-600 border-rose-600 text-white' : 'border-slate-200 text-slate-500'}`}>🧪 Thi &amp; Kiểm tra</button>
+      </div>
       <label className="block text-sm font-medium mb-1">Tiêu đề</label>
       <input value={title} onChange={e => setTitle(e.target.value)} placeholder="VD: Kiểm tra 15 phút — Bài thơ Sang thu" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl mb-3" />
       <label className="block text-sm font-medium mb-1">Nội dung đề / câu hỏi</label>
@@ -554,6 +594,48 @@ const NewAssignmentModal = ({ cls, user, onClose }) => {
       <button onClick={create} disabled={busy} className="btn-rose w-full py-3 rounded-xl font-semibold disabled:opacity-60">{busy ? <Spinner /> : 'Giao cho lớp ' + cls.name}</button>
     </Modal>
   );
+};
+
+// ============== GIÁO VIÊN — TÀI LIỆU LỚP ==============
+const NewMaterialModal = ({ cls, user, onClose }) => {
+  const [title, setTitle] = useState(''); const [content, setContent] = useState(''); const [url, setUrl] = useState(''); const [busy, setBusy] = useState(false);
+  const create = async () => {
+    if (!title.trim()) { alert('Nhập tên tài liệu.'); return; }
+    setBusy(true);
+    await db.collection('classes').doc(cls.id).collection('materials').add({ title: title.trim(), content: content.trim(), url: url.trim(), createdAt: Date.now(), createdBy: user.uid });
+    setBusy(false); onClose();
+  };
+  return (
+    <Modal onClose={onClose} title="Thêm tài liệu">
+      <label className="block text-sm font-medium mb-1">Tên tài liệu</label>
+      <input value={title} onChange={e => setTitle(e.target.value)} placeholder="VD: Sơ đồ tư duy bài Sang thu" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl mb-3" />
+      <label className="block text-sm font-medium mb-1">Nội dung (tuỳ chọn)</label>
+      <textarea value={content} onChange={e => setContent(e.target.value)} rows={5} placeholder="Ghi chú, tóm tắt, hoặc dán nội dung tài liệu vào đây..." className="w-full px-3 py-2.5 border border-slate-200 rounded-xl mb-3 text-sm" />
+      <label className="block text-sm font-medium mb-1">Đường dẫn (tuỳ chọn)</label>
+      <input value={url} onChange={e => setUrl(e.target.value)} placeholder="VD: link Google Drive, YouTube..." className="w-full px-3 py-2.5 border border-slate-200 rounded-xl mb-4" />
+      <button onClick={create} disabled={busy} className="btn-teal w-full py-3 rounded-xl font-semibold disabled:opacity-60">{busy ? <Spinner /> : 'Thêm cho lớp ' + cls.name}</button>
+    </Modal>
+  );
+};
+const MaterialsView = ({ cls }) => {
+  const [items, setItems] = useState([]);
+  useEffect(() => {
+    const un = db.collection('classes').doc(cls.id).collection('materials').onSnapshot(s =>
+      setItems(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.createdAt - a.createdAt)));
+    return un;
+  }, [cls.id]);
+  const remove = (id) => { if (confirm('Xoá tài liệu này?')) db.collection('classes').doc(cls.id).collection('materials').doc(id).delete(); };
+  if (items.length === 0) return <p className="text-center text-slate-400 py-8">Chưa có tài liệu nào. Bấm nút bên dưới để thêm.</p>;
+  return items.map(m => (
+    <div key={m.id} className="card p-4 w-full text-left mb-3">
+      <div className="flex items-start justify-between gap-2">
+        <p className="font-semibold text-teal-900">📚 {m.title}</p>
+        <button onClick={() => remove(m.id)} className="text-xs text-rose-500 shrink-0">Xoá</button>
+      </div>
+      {m.content && <p className="text-sm text-slate-600 mt-1.5 whitespace-pre-wrap">{m.content}</p>}
+      {m.url && <a href={m.url} target="_blank" rel="noopener noreferrer" className="text-sm text-teal-600 underline mt-1.5 inline-block break-all">🔗 {m.url}</a>}
+    </div>
+  ));
 };
 
 // ============== GIÁO VIÊN — DANH SÁCH BÀI NỘP + CHẤM ==============
@@ -844,6 +926,7 @@ const StudentJoin = ({ onBack, onJoined }) => {
 const StudentHome = ({ sv, onLeave }) => {
   const [tab, setTab] = useState('bai');
   const [assignments, setAssignments] = useState([]);
+  const [materials, setMaterials] = useState([]);
   const [mySubs, setMySubs] = useState({});
   const [doing, setDoing] = useState(null);
   const [msgNewest, setMsgNewest] = useState(0);
@@ -851,6 +934,8 @@ const StudentHome = ({ sv, onLeave }) => {
   const seenKey = (t) => 'seen_' + t + '_' + sv.code;
   const [seen, setSeen] = useState(() => ({
     bai: +(localStorage.getItem(seenKey('bai')) || 0),
+    kiemtra: +(localStorage.getItem(seenKey('kiemtra')) || 0),
+    tailieu: +(localStorage.getItem(seenKey('tailieu')) || 0),
     diem: +(localStorage.getItem(seenKey('diem')) || 0),
     msg: +(localStorage.getItem(seenKey('msg')) || 0),
   }));
@@ -866,29 +951,59 @@ const StudentHome = ({ sv, onLeave }) => {
       const other = s.docs.map(d => d.data()).find(mm => mm.fromName !== sv.name);
       setMsgNewest(other ? (other.at || 0) : 0);
     }, err => console.warn('messages listener:', err && err.code));
-    return () => { un1(); un2(); un3(); };
+    const un4 = db.collection('classes').doc(sv.code).collection('materials').onSnapshot(s =>
+      setMaterials(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.createdAt - a.createdAt)),
+      err => console.warn('materials listener:', err && err.code));
+    return () => { un1(); un2(); un3(); un4(); };
   }, [sv.code]);
+  const isKT = (a) => a.kind === 'kiemtra';
+  const baiList = assignments.filter(a => !isKT(a));
+  const ktList = assignments.filter(isKT);
   // Mốc "mới nhất" của từng mục để so với "đã xem"
-  const asgNewest = assignments.reduce((mx, a) => Math.max(mx, a.createdAt || 0), 0);
+  const baiNewest = baiList.reduce((mx, a) => Math.max(mx, a.createdAt || 0), 0);
+  const ktNewest = ktList.reduce((mx, a) => Math.max(mx, a.createdAt || 0), 0);
+  const matNewest = materials.reduce((mx, m) => Math.max(mx, m.createdAt || 0), 0);
   const gradeNewest = Object.values(mySubs).filter(s => s.status === 'released').reduce((mx, s) => Math.max(mx, s.releasedAt || s.submittedAt || 0), 0);
-  const newestOf = { bai: asgNewest, diem: gradeNewest, msg: msgNewest };
-  const unread = { bai: asgNewest > seen.bai, diem: gradeNewest > seen.diem, msg: msgNewest > seen.msg };
+  const newestOf = { bai: baiNewest, kiemtra: ktNewest, tailieu: matNewest, diem: gradeNewest, msg: msgNewest };
+  const unread = { bai: baiNewest > seen.bai, kiemtra: ktNewest > seen.kiemtra, tailieu: matNewest > seen.tailieu, diem: gradeNewest > seen.diem, msg: msgNewest > seen.msg };
   // Xem tab nào thì đánh dấu tab đó "đã đọc"
   useEffect(() => {
     const v = newestOf[tab];
     if (v && v > (seen[tab] || 0)) { localStorage.setItem(seenKey(tab), v); setSeen(s => ({ ...s, [tab]: v })); }
-  }, [tab, asgNewest, gradeNewest, msgNewest]);
-  // Bài chưa làm, chưa hết hạn → để nhắc
-  const todo = assignments.filter(a => {
+  }, [tab, baiNewest, ktNewest, matNewest, gradeNewest, msgNewest]);
+  // Bài chưa làm, chưa hết hạn → để nhắc (tính riêng cho từng loại)
+  const todoOf = (list) => list.filter(a => {
     const sub = mySubs[a.id]; const done = sub && (sub.status === 'submitted' || sub.status === 'released');
     const expired = a.deadline && Date.now() > a.deadline;
     return !done && !expired;
   }).sort((a, b) => (a.deadline || Infinity) - (b.deadline || Infinity));
   if (doing) return <DoAssignment sv={sv} asg={doing} sub={mySubs[doing.id]} onDone={() => setDoing(null)} />;
   const theme = getOccasion();
-  const tabs = [['bai', '📝', 'Bài tập'], ['diem', '📊', 'Điểm'], ['msg', '💬', 'Trò chuyện']];
+  // Thứ tự theo yêu cầu: Chat | Tài liệu | Bài tập (trung tâm) | Thi & Kiểm tra | Kết quả
+  const tabs = [['msg', '💬', 'Chat'], ['tailieu', '📚', 'Tài liệu'], ['bai', '📝', 'Bài tập'], ['kiemtra', '🧪', 'Thi & KT'], ['diem', '🏆', 'Kết quả']];
+  const renderAssignmentList = (list, emptyIcon, emptyText) => <div className="fade-in">
+    {todoOf(list).length > 0 && <div className="rounded-2xl p-4 mb-3.5 text-white shadow-lg pop flex items-center gap-3" style={{ background: `linear-gradient(135deg,${theme.a},${theme.b})` }}>
+      <div className="text-2xl">🔔</div>
+      <div className="flex-1"><p className="font-bold text-sm">Em còn {todoOf(list).length} bài chưa làm</p>{todoOf(list)[0].deadline && <p className="text-[11px] text-white/90 mt-0.5">Gần nhất: "{todoOf(list)[0].title}" — {timeLeft(todoOf(list)[0].deadline)}</p>}</div>
+    </div>}
+    {list.length === 0 && <div className="glass rounded-3xl p-10 text-center"><div className="text-5xl mb-2">{emptyIcon}</div><p className="text-slate-500 font-medium">{emptyText}</p><p className="text-xs text-slate-400 mt-1">Cô giao bài là em sẽ thấy ở đây nhé!</p></div>}
+    {list.map(a => {
+      const sub = mySubs[a.id]; const expired = a.deadline && Date.now() > a.deadline;
+      const done = sub && (sub.status === 'submitted' || sub.status === 'released');
+      const inprog = sub && sub.status === 'in_progress';
+      return <div key={a.id} className="glass rounded-3xl p-5 mb-3.5 shadow-lg pop">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1"><p className="font-bold text-[15px] text-slate-800 leading-snug">{a.title}</p><p className="text-xs text-slate-500 mt-1">⏱ {a.durationMin} phút · Hạn {fmtDate(a.deadline)}{a.deadline && !done && <span className={`ml-1 font-semibold ${(a.deadline - Date.now()) < 86400000 ? 'text-rose-600' : 'text-teal-700'}`}>({timeLeft(a.deadline)})</span>}</p></div>
+          {done ? <Badge tone="green">Đã nộp ✓</Badge> : expired ? <Badge tone="gray">Hết hạn</Badge> : inprog ? <Badge tone="amber">Đang làm</Badge> : <Badge tone="rose">Chưa làm</Badge>}
+        </div>
+        {!done && !expired && <button onClick={() => setDoing(a)} className="btn-grad w-full py-3 rounded-2xl font-bold mt-4" style={{ '--a': theme.a, '--b': theme.b }}>{inprog ? '⏱ Tiếp tục làm bài' : '✍️ Bắt đầu làm bài'}</button>}
+        {done && sub.status === 'released' && <div className="mt-4 rounded-2xl p-4 text-white" style={{ background: `linear-gradient(135deg,${theme.a},${theme.b})` }}><p className="text-sm">🎉 Điểm của em: <b className="text-2xl align-middle">{sub.finalScore}</b><span className="opacity-90">/10</span></p>{sub.finalFeedback && <p className="text-xs mt-1.5 bg-white/20 rounded-xl px-3 py-2">💬 {sub.finalFeedback}</p>}</div>}
+        {done && sub.status === 'submitted' && <p className="text-xs text-amber-600 mt-3 text-center font-medium bg-amber-50 rounded-xl py-2">✅ Đã nộp — chờ cô chấm 🌸</p>}
+      </div>;
+    })}
+  </div>;
   return (
-    <div className="min-h-screen pb-12 relative">
+    <div className="min-h-screen pb-28 relative">
       <SeasonalBg theme={theme} />
       <div className="px-5 py-4 flex items-center justify-between sticky top-0 z-20 shadow-lg" style={{ background: `linear-gradient(135deg,${theme.a},${theme.b})` }}>
         <div className="flex items-center gap-3">
@@ -906,42 +1021,44 @@ const StudentHome = ({ sv, onLeave }) => {
           <button onClick={onLeave} className="text-xs font-semibold bg-white/20 hover:bg-white/30 text-white px-3 py-2 rounded-xl backdrop-blur transition">Thoát</button>
         </div>
       </div>
-      <div className="max-w-2xl mx-auto px-3 pt-3 sticky top-[68px] z-10">
-        <div className="glass rounded-2xl p-1.5 flex gap-1 shadow">
-          {tabs.map(([k, ic, l]) =>
-            <button key={k} onClick={() => setTab(k)} className={`relative flex-1 py-2.5 rounded-xl text-sm font-semibold transition ${tab === k ? 'text-white shadow' : 'text-slate-500 hover:bg-white/60'}`} style={tab === k ? { background: `linear-gradient(135deg,${theme.a},${theme.b})` } : {}}>{ic} {l}{unread[k] && tab !== k && <span className="dot"></span>}</button>)}
-        </div>
-      </div>
       <div className="max-w-2xl mx-auto p-4">
-        {tab === 'bai' && <div className="fade-in">
-          {todo.length > 0 && <div className="rounded-2xl p-4 mb-3.5 text-white shadow-lg pop flex items-center gap-3" style={{ background: `linear-gradient(135deg,${theme.a},${theme.b})` }}>
-            <div className="text-2xl">🔔</div>
-            <div className="flex-1"><p className="font-bold text-sm">Em còn {todo.length} bài chưa làm</p>{todo[0].deadline && <p className="text-[11px] text-white/90 mt-0.5">Gần nhất: "{todo[0].title}" — {timeLeft(todo[0].deadline)}</p>}</div>
-          </div>}
-          {assignments.length === 0 && <div className="glass rounded-3xl p-10 text-center"><div className="text-5xl mb-2">🌱</div><p className="text-slate-500 font-medium">Chưa có bài tập nào.</p><p className="text-xs text-slate-400 mt-1">Cô giao bài là em sẽ thấy ở đây nhé!</p></div>}
-          {assignments.map(a => {
-            const sub = mySubs[a.id]; const expired = a.deadline && Date.now() > a.deadline;
-            const done = sub && (sub.status === 'submitted' || sub.status === 'released');
-            const inprog = sub && sub.status === 'in_progress';
-            return <div key={a.id} className="glass rounded-3xl p-5 mb-3.5 shadow-lg pop">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1"><p className="font-bold text-[15px] text-slate-800 leading-snug">{a.title}</p><p className="text-xs text-slate-500 mt-1">⏱ {a.durationMin} phút · Hạn {fmtDate(a.deadline)}{a.deadline && !done && <span className={`ml-1 font-semibold ${(a.deadline - Date.now()) < 86400000 ? 'text-rose-600' : 'text-teal-700'}`}>({timeLeft(a.deadline)})</span>}</p></div>
-                {done ? <Badge tone="green">Đã nộp ✓</Badge> : expired ? <Badge tone="gray">Hết hạn</Badge> : inprog ? <Badge tone="amber">Đang làm</Badge> : <Badge tone="rose">Chưa làm</Badge>}
-              </div>
-              {!done && !expired && <button onClick={() => setDoing(a)} className="btn-grad w-full py-3 rounded-2xl font-bold mt-4" style={{ '--a': theme.a, '--b': theme.b }}>{inprog ? '⏱ Tiếp tục làm bài' : '✍️ Bắt đầu làm bài'}</button>}
-              {done && sub.status === 'released' && <div className="mt-4 rounded-2xl p-4 text-white" style={{ background: `linear-gradient(135deg,${theme.a},${theme.b})` }}><p className="text-sm">🎉 Điểm của em: <b className="text-2xl align-middle">{sub.finalScore}</b><span className="opacity-90">/10</span></p>{sub.finalFeedback && <p className="text-xs mt-1.5 bg-white/20 rounded-xl px-3 py-2">💬 {sub.finalFeedback}</p>}</div>}
-              {done && sub.status === 'submitted' && <p className="text-xs text-amber-600 mt-3 text-center font-medium bg-amber-50 rounded-xl py-2">✅ Đã nộp — chờ cô chấm 🌸</p>}
-            </div>;
-          })}
+        {tab === 'bai' && renderAssignmentList(baiList, '🌱', 'Chưa có bài tập nào.')}
+        {tab === 'kiemtra' && renderAssignmentList(ktList, '🧪', 'Chưa có bài thi/kiểm tra nào.')}
+        {tab === 'tailieu' && <div className="fade-in">
+          {materials.length === 0 && <div className="glass rounded-3xl p-10 text-center"><div className="text-5xl mb-2">📚</div><p className="text-slate-500 font-medium">Chưa có tài liệu nào.</p></div>}
+          {materials.map(m => <div key={m.id} className="glass rounded-3xl p-5 mb-3.5 shadow-lg pop">
+            <p className="font-bold text-[15px] text-slate-800">📚 {m.title}</p>
+            {m.content && <p className="text-sm text-slate-600 mt-1.5 whitespace-pre-wrap leading-relaxed">{m.content}</p>}
+            {m.url && <a href={m.url} target="_blank" rel="noopener noreferrer" className="btn-grad inline-block mt-3 px-4 py-2 rounded-xl text-sm font-semibold" style={{ '--a': theme.a, '--b': theme.b }}>🔗 Mở tài liệu</a>}
+          </div>)}
         </div>}
         {tab === 'diem' && <div className="fade-in">
-          {Object.values(mySubs).filter(s => s.status === 'released').length === 0 && <div className="glass rounded-3xl p-10 text-center"><div className="text-5xl mb-2">📊</div><p className="text-slate-500 font-medium">Chưa có điểm nào được trả.</p></div>}
+          {Object.values(mySubs).filter(s => s.status === 'released').length === 0 && <div className="glass rounded-3xl p-10 text-center"><div className="text-5xl mb-2">🏆</div><p className="text-slate-500 font-medium">Chưa có điểm nào được trả.</p></div>}
           {Object.values(mySubs).filter(s => s.status === 'released').map(s => {
             const a = assignments.find(x => x.id === s.assignmentId);
             return <div key={s.id} className="glass rounded-3xl p-5 mb-3.5 shadow-lg pop"><div className="flex items-center justify-between"><p className="font-bold text-slate-800">{a ? a.title : 'Bài tập'}</p><p className="text-3xl font-extrabold" style={{ color: theme.a }}>{s.finalScore}</p></div>{s.finalFeedback && <div className="bg-slate-50 rounded-2xl p-3 mt-2.5 text-sm text-slate-700">💬 {s.finalFeedback}</div>}</div>;
           })}
         </div>}
         {tab === 'msg' && <div className="fade-in"><MessagesView cls={sv.cls} sender={{ role: 'student', name: sv.name }} /></div>}
+      </div>
+      <div className="fixed bottom-0 inset-x-0 z-20 px-3 pb-2 pt-1">
+        <div className="max-w-2xl mx-auto glass rounded-2xl p-1.5 flex items-end gap-1 shadow-xl">
+          {tabs.map(([k, ic, l]) => {
+            const isCenter = k === 'bai';
+            if (isCenter) return (
+              <button key={k} onClick={() => setTab(k)} className="relative flex-1 flex flex-col items-center -mt-6">
+                <span className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl text-white shadow-lg transition ${tab === k ? 'scale-105' : 'opacity-90'}`} style={{ background: `linear-gradient(135deg,${theme.a},${theme.b})` }}>{ic}</span>
+                <span className="text-[11px] font-bold mt-1" style={tab === k ? { color: theme.a } : { color: '#64748b' }}>{l}</span>
+                {unread[k] && tab !== k && <span className="dot" style={{ top: -2, right: '28%' }}></span>}
+              </button>
+            );
+            return (
+              <button key={k} onClick={() => setTab(k)} className={`relative flex-1 py-2 rounded-xl text-[11px] font-semibold transition flex flex-col items-center gap-0.5 ${tab === k ? '' : 'text-slate-500 hover:bg-white/60'}`} style={tab === k ? { color: theme.a } : {}}>
+                <span className="text-lg leading-none">{ic}</span>{l}{unread[k] && tab !== k && <span className="dot"></span>}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -959,32 +1076,52 @@ const DoAssignment = ({ sv, asg, sub, onDone }) => {
     if (sub && sub.answer) return { 0: sub.answer };
     return {};
   };
+  // 🔀 Cách làm bài: 'type' (gõ trực tiếp) hoặc 'photo' (nộp ảnh chụp). Nhớ lại nếu đã chọn trước đó.
+  const initMode = () => {
+    if (sub && sub.mode) return sub.mode;
+    if (sub && sub.images && sub.images.length) return 'photo';
+    if (sub && sub.answer) return 'type';
+    return null;
+  };
+  const [mode, setModeState] = useState(initMode);
   const [answers, setAnswers] = useState(initAnswers);
   const answersRef = useRef(answers); answersRef.current = answers;
   const [images, setImages] = useState(sub && sub.images ? sub.images : []);
   const imagesRef = useRef(images); imagesRef.current = images;
   const [imgBusy, setImgBusy] = useState(false);
+  const [reviewPhoto, setReviewPhoto] = useState(null); // { dataUrl, blurry } — ảnh vừa chụp, chờ HS xác nhận
   const fileRef = useRef(null);
   const [startedAt] = useState(sub && sub.startedAt ? sub.startedAt : Date.now());
   const [remain, setRemain] = useState(0);
   const submittedRef = useRef(false);
+  const MAX_PHOTOS = 10;
   const buildCombined = (ans) => qs.map((q, i) => `${q.label || (parsed.single ? 'Bài làm' : 'Câu ' + (i + 1))}:\n${(ans[i] || '').trim()}`).join('\n\n');
   useEffect(() => {
     if (!sub || !sub.startedAt) ref.set({ assignmentId: asg.id, studentAuthUid: auth.currentUser.uid, studentName: sv.name, answer: '', answersByQ: {}, startedAt, status: 'in_progress' }, { merge: true });
   }, []);
-  const addImages = async (files) => {
-    if (!files || !files.length) return;
+  const setMode = (m) => { setModeState(m); ref.update({ mode: m }).catch(() => {}); };
+  // Chụp 1 ảnh -> kiểm tra độ nét -> đưa vào màn hình xác nhận (không tự thêm ngay).
+  const captureOnePhoto = async (file) => {
+    if (!file) return;
     setImgBusy(true);
-    const cur = [...imagesRef.current];
-    for (const f of Array.from(files)) { if (cur.length >= 4) break; try { cur.push(await fileToDataURL(f)); } catch (e) {} }
-    setImages(cur); setImgBusy(false);
+    try {
+      const dataUrl = await fileToDataURL(file);
+      const blurry = await isImageBlurry(dataUrl);
+      setReviewPhoto({ dataUrl, blurry });
+    } catch (e) { alert('Không đọc được ảnh, em thử chụp lại nhé.'); }
+    setImgBusy(false);
+  };
+  const acceptReviewPhoto = () => {
+    if (!reviewPhoto) return;
+    const cur = [...imagesRef.current, reviewPhoto.dataUrl];
+    setImages(cur); setReviewPhoto(null);
     ref.update({ images: cur }).catch(() => {});
   };
   const removeImage = (idx) => { const cur = imagesRef.current.filter((_, i) => i !== idx); setImages(cur); ref.update({ images: cur }).catch(() => {}); };
   const doSubmit = async (auto) => {
     if (submittedRef.current) return; submittedRef.current = true;
     const ans = answersRef.current;
-    await ref.set({ assignmentId: asg.id, studentAuthUid: auth.currentUser.uid, studentName: sv.name, answer: buildCombined(ans), answersByQ: ans, images: imagesRef.current, startedAt, submittedAt: Date.now(), status: 'submitted' }, { merge: true });
+    await ref.set({ assignmentId: asg.id, studentAuthUid: auth.currentUser.uid, studentName: sv.name, mode, answer: buildCombined(ans), answersByQ: ans, images: imagesRef.current, startedAt, submittedAt: Date.now(), status: 'submitted' }, { merge: true });
     alert(auto ? '⏰ Hết giờ! Bài đã tự nộp.' : '✅ Đã nộp bài. Chờ cô chấm nhé 🌸');
     onDone();
   };
@@ -998,11 +1135,12 @@ const DoAssignment = ({ sv, asg, sub, onDone }) => {
     };
     tick(); const iv = setInterval(tick, 1000); return () => clearInterval(iv);
   }, []);
-  useEffect(() => { const t = setTimeout(() => { ref.update({ answersByQ: answers, answer: buildCombined(answers) }).catch(() => {}); }, 800); return () => clearTimeout(t); }, [answers]);
+  useEffect(() => { if (mode !== 'type') return; const t = setTimeout(() => { ref.update({ answersByQ: answers, answer: buildCombined(answers) }).catch(() => {}); }, 800); return () => clearTimeout(t); }, [answers, mode]);
   const setQ = (i, v) => setAnswers(a => ({ ...a, [i]: v }));
   const answeredCount = qs.filter((_, i) => (answers[i] || '').trim()).length;
   const totalWords = qs.reduce((n, _, i) => n + countWords(answers[i]), 0);
   const urgent = remain <= 60;
+  const canSubmit = mode === 'photo' ? images.length > 0 : true;
   // Dùng HÀM trả JSX (không phải component con) để ô nhập không bị mất con trỏ khi gõ.
   const renderField = (i, heading, prompt) => {
     const val = answers[i] || '';
@@ -1022,16 +1160,42 @@ const DoAssignment = ({ sv, asg, sub, onDone }) => {
     );
   };
 
-  return (
-    <div className="min-h-screen pb-28 relative">
-      <SeasonalBg theme={theme} />
+  const Header = ({ subtitle }) => (
+    <>
       <div className="px-5 py-3 flex items-center gap-3 sticky top-0 z-20 shadow-lg" style={{ background: `linear-gradient(135deg,${theme.a},${theme.b})` }}>
-        <div className="flex-1"><p className="font-bold hdr-title text-sm leading-tight">{asg.title}</p><p className="text-[11px] text-white/90">Đã làm {answeredCount}/{qs.length} câu · {totalWords} từ</p></div>
+        <div className="flex-1"><p className="font-bold hdr-title text-sm leading-tight">{asg.title}</p><p className="text-[11px] text-white/90">{subtitle}</p></div>
       </div>
       <div className={`px-5 py-3 flex items-center justify-between sticky top-[56px] z-10 shadow ${urgent ? 'bg-red-500 text-white animate-pulse' : 'glass text-slate-700'}`}>
         <span className="text-sm font-medium">⏱ Thời gian còn lại</span>
         <span className="text-2xl font-extrabold tracking-wider tabular-nums">{fmtTime(remain)}</span>
       </div>
+    </>
+  );
+
+  // ── Bước 1: CHỌN CÁCH LÀM BÀI (chưa chọn thì luôn hiện màn này trước) ──
+  if (!mode) return (
+    <div className="min-h-screen pb-10 relative">
+      <SeasonalBg theme={theme} />
+      <Header subtitle="Chọn cách làm bài" />
+      <div className="max-w-md mx-auto p-5 space-y-4">
+        <p className="text-center text-sm text-slate-500 mb-2">Em muốn làm bài này như thế nào?</p>
+        <button onClick={() => setMode('type')} className="qcard w-full p-5 text-left flex items-center gap-4 hover:shadow-lg transition">
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl text-white shrink-0" style={{ background: `linear-gradient(135deg,${theme.a},${theme.b})` }}>✍️</div>
+          <div><p className="font-bold text-slate-800">Làm bài trực tiếp</p><p className="text-xs text-slate-500 mt-0.5">Gõ câu trả lời cho từng câu hỏi ngay trên máy</p></div>
+        </button>
+        <button onClick={() => setMode('photo')} className="qcard w-full p-5 text-left flex items-center gap-4 hover:shadow-lg transition">
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl text-white shrink-0" style={{ background: `linear-gradient(135deg,${theme.a},${theme.b})` }}>📷</div>
+          <div><p className="font-bold text-slate-800">Nộp bằng ảnh chụp</p><p className="text-xs text-slate-500 mt-0.5">Làm bài ra giấy rồi chụp ảnh nộp (tối đa {MAX_PHOTOS} ảnh)</p></div>
+        </button>
+      </div>
+    </div>
+  );
+
+  // ── Bước 2a: LÀM TRỰC TIẾP ──
+  if (mode === 'type') return (
+    <div className="min-h-screen pb-28 relative">
+      <SeasonalBg theme={theme} />
+      <Header subtitle={`Đã làm ${answeredCount}/${qs.length} câu · ${totalWords} từ`} />
       <div className="max-w-2xl lg:max-w-5xl mx-auto p-4">
         <div className={(!parsed.single && parsed.intro) ? 'do-grid' : ''}>
           {!parsed.single && parsed.intro &&
@@ -1043,18 +1207,6 @@ const DoAssignment = ({ sv, asg, sub, onDone }) => {
             </div>}
           <div>
             {qs.map((q, i) => renderField(i, parsed.single ? 'Bài làm của em' : q.label, parsed.single ? '' : stripLabel(q.prompt)))}
-            <div className="qcard p-4 mb-4">
-              <div className="flex items-center justify-between mb-2">
-                <p className="font-bold text-slate-800 text-sm">📷 Ảnh bài viết tay (nếu có)</p>
-                <span className="text-[11px] text-slate-400">{images.length}/4</span>
-              </div>
-              <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={e => { addImages(e.target.files); e.target.value = ''; }} />
-              <div className="flex flex-wrap gap-2 items-center">
-                {images.map((im, i) => <div key={i} className="relative"><img src={im} className="thumb" alt="bài" /><button onClick={() => removeImage(i)} className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-rose-600 text-white text-xs shadow flex items-center justify-center">✕</button></div>)}
-                {images.length < 4 && <button onClick={() => fileRef.current && fileRef.current.click()} disabled={imgBusy} className="w-[76px] h-[76px] rounded-2xl border-2 border-dashed border-slate-300 text-slate-400 flex flex-col items-center justify-center text-xs hover:border-slate-400 disabled:opacity-60">{imgBusy ? '⏳' : <><span className="text-xl leading-none">＋</span>Thêm</>}</button>}
-              </div>
-              <p className="text-[11px] text-slate-400 mt-2">Chụp hoặc chọn ảnh bài làm viết tay — cô sẽ xem cùng bài gõ.</p>
-            </div>
             <p className="text-[11px] text-slate-500 text-center mt-1">💾 Bài tự lưu liên tục — không lo mất. Hết giờ hệ thống tự nộp.</p>
           </div>
         </div>
@@ -1064,6 +1216,53 @@ const DoAssignment = ({ sv, asg, sub, onDone }) => {
           <button onClick={() => { if (confirm('Nộp bài ngay bây giờ? Sau khi nộp không sửa được nữa.')) doSubmit(false); }} className="btn-grad w-full py-3.5 rounded-2xl font-bold text-base" style={{ '--a': theme.a, '--b': theme.b }}>📨 Nộp bài</button>
         </div>
       </div>
+    </div>
+  );
+
+  // ── Bước 2b: NỘP BẰNG ẢNH CHỤP ──
+  return (
+    <div className="min-h-screen pb-28 relative">
+      <SeasonalBg theme={theme} />
+      <Header subtitle={`Đã chụp ${images.length}/${MAX_PHOTOS} ảnh`} />
+      <div className="max-w-2xl mx-auto p-4">
+        {!parsed.single && parsed.intro &&
+          <div className="qcard p-4 mb-4">
+            <p className="text-[11px] font-bold uppercase tracking-wide mb-2" style={{ color: theme.a }}>📖 Đề bài / Ngữ liệu</p>
+            <div className="text-[13px] whitespace-pre-wrap leading-relaxed text-slate-700">{parsed.intro}</div>
+          </div>}
+        <div className="qcard p-4 mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <p className="font-bold text-slate-800 text-sm">📷 Ảnh bài làm</p>
+            <span className="text-[11px] text-slate-400">{images.length}/{MAX_PHOTOS}</span>
+          </div>
+          <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { const f = e.target.files && e.target.files[0]; captureOnePhoto(f); e.target.value = ''; }} />
+          <div className="flex flex-wrap gap-2 items-center">
+            {images.map((im, i) => <div key={i} className="relative"><img src={im} className="thumb" alt="bài" /><span className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-slate-800 text-white text-[10px] font-bold flex items-center justify-center">{i + 1}</span><button onClick={() => removeImage(i)} className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-rose-600 text-white text-xs shadow flex items-center justify-center">✕</button></div>)}
+            {images.length < MAX_PHOTOS && <button onClick={() => fileRef.current && fileRef.current.click()} disabled={imgBusy} className="w-[76px] h-[76px] rounded-2xl border-2 border-dashed border-slate-300 text-slate-400 flex flex-col items-center justify-center text-xs hover:border-slate-400 disabled:opacity-60">{imgBusy ? '⏳' : <><span className="text-2xl leading-none">📷</span>Chụp</>}</button>}
+          </div>
+          <p className="text-[11px] text-slate-400 mt-2">Chụp lần lượt từng trang bài làm. Mỗi ảnh sẽ được kiểm tra độ nét trước khi lưu.</p>
+        </div>
+        <p className="text-[11px] text-slate-500 text-center mt-1">💾 Bài tự lưu liên tục — không lo mất. Hết giờ hệ thống tự nộp.</p>
+      </div>
+      <div className="fixed bottom-0 inset-x-0 p-3 glass border-t border-white/40 z-20">
+        <div className="max-w-2xl mx-auto">
+          <button onClick={() => { if (!canSubmit) { alert('Em chụp ít nhất 1 ảnh bài làm trước khi nộp nhé.'); return; } if (confirm('Nộp bài ngay bây giờ? Sau khi nộp không sửa được nữa.')) doSubmit(false); }} className="btn-grad w-full py-3.5 rounded-2xl font-bold text-base disabled:opacity-50" style={{ '--a': theme.a, '--b': theme.b }}>📨 Nộp bài</button>
+        </div>
+      </div>
+      {/* ── Màn xác nhận ảnh vừa chụp — rõ nét thì dùng, mờ thì nhắc chụp lại ── */}
+      {reviewPhoto && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-4 max-w-sm w-full fade-in">
+            <p className="font-bold text-center mb-3">{reviewPhoto.blurry ? '⚠️ Ảnh có vẻ hơi mờ' : '✅ Ảnh khá rõ nét'}</p>
+            <img src={reviewPhoto.dataUrl} className="w-full rounded-2xl border-2" style={{ borderColor: reviewPhoto.blurry ? '#f59e0b' : '#10b981' }} alt="ảnh vừa chụp" />
+            {reviewPhoto.blurry && <p className="text-xs text-amber-600 text-center mt-2 bg-amber-50 rounded-xl py-2 px-3">Chữ có thể khó đọc. Em nên chụp lại cho rõ hơn nhé — hoặc vẫn dùng ảnh này nếu em thấy đọc được.</p>}
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setReviewPhoto(null)} className="flex-1 py-3 rounded-2xl font-semibold bg-slate-100 text-slate-600">🔄 Chụp lại</button>
+              <button onClick={acceptReviewPhoto} className="flex-1 py-3 rounded-2xl font-semibold text-white" style={{ background: reviewPhoto.blurry ? '#f59e0b' : '#10b981' }}>✅ Dùng ảnh này</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
