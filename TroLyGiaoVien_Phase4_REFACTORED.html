@@ -1282,6 +1282,47 @@ const callGroqAPI = async (prompt, maxTokens = 500) => {
   }
 };
 
+// 🛟 Trích JSON từ phản hồi AI một cách AN TOÀN cho việc ra đề.
+// AI hay quên escape dấu xuống dòng bên trong chuỗi JSON -> JSON.parse lỗi.
+// Thay vì (như trước đây) đổ nguyên văn bản thô ra đề khi lỗi, hàm này cố cứu
+// từng field bằng regex; nếu vẫn không cứu được field nào -> trả về { ok:false }
+// để nơi gọi báo lỗi rõ ràng, KHÔNG BAO GIỜ để lộ JSON thô ra bài kiểm tra.
+const parseAIExamJson = (rawText, keys) => {
+  const txt = String(rawText || '').trim()
+    .replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/```\s*$/, '').trim();
+  try {
+    const json = JSON.parse(txt);
+    if (keys.some(k => json[k] != null)) return { ok: true, data: json };
+  } catch (e) { /* rơi xuống cách cứu dữ liệu bằng regex bên dưới */ }
+  const data = {};
+  let found = false;
+  keys.forEach(key => {
+    const re = new RegExp('"' + key + '"\\s*:\\s*"([\\s\\S]*?)"\\s*(?=,\\s*"[a-zA-Z]+"\\s*:|\\}\\s*,?\\s*"?[a-zA-Z]*"?\\s*:?|\\}\\s*$)');
+    const m = txt.match(re);
+    if (m) { data[key] = m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim(); found = true; }
+  });
+  return found ? { ok: true, data } : { ok: false };
+};
+// Trích 1 object lồng bên trong (vd "nguLieu": {...}) khi JSON.parse tổng thể đã lỗi.
+const parseAINestedObject = (rawText, objectKey, innerKeys) => {
+  const m = String(rawText || '').match(new RegExp('"' + objectKey + '"\\s*:\\s*\\{([\\s\\S]*?)\\}'));
+  if (!m) return null;
+  const inner = parseAIExamJson('{' + m[1] + '}', innerKeys);
+  return inner.ok ? inner.data : null;
+};
+// 🔘 "Loại câu hỏi" cô chọn TRƯỚC khi AI ra đề — áp dụng cho phần Đọc hiểu
+// (phần Viết luôn là bài viết/đoạn văn, không trắc nghiệm hoá được).
+const QUESTION_TYPE_OPTIONS = [
+  { id: 'mix', label: '🔀 Kết hợp (mặc định)', desc: 'Nhận biết/Thông hiểu trắc nghiệm A/B/C/D, Vận dụng tự luận' },
+  { id: 'tn', label: '☑️ Toàn trắc nghiệm', desc: 'Tất cả câu Đọc hiểu đều trắc nghiệm A/B/C/D' },
+  { id: 'tl', label: '✍️ Toàn tự luận', desc: 'Tất cả câu Đọc hiểu học sinh tự viết câu trả lời' },
+];
+const buildQuestionTypeInstruction = (aiQuestionType) => ({
+  tn: 'TẤT CẢ các câu hỏi phần Đọc hiểu (kể cả câu Vận dụng) PHẢI là trắc nghiệm 4 lựa chọn A/B/C/D — viết rõ 4 phương án ngay dưới mỗi câu, và trong phần đáp án phải nêu rõ đáp án đúng là phương án nào.',
+  tl: 'TẤT CẢ các câu hỏi phần Đọc hiểu là dạng TỰ LUẬN (học sinh tự viết câu trả lời bằng lời văn), KHÔNG được dùng trắc nghiệm A/B/C/D cho bất kỳ câu nào.',
+  mix: 'Các câu Nhận biết và Thông hiểu ở phần Đọc hiểu PHẢI là trắc nghiệm 4 lựa chọn A/B/C/D (viết rõ 4 phương án ngay dưới mỗi câu, nêu đáp án đúng trong phần đáp án); câu Vận dụng là tự luận ngắn.',
+}[aiQuestionType || 'mix']);
+
 const callOllamaAPI = async (prompt, maxTokens = 500) => {
   const ollamaUrl = localStorage.getItem('ollama_url') || 'http://localhost:11434';
   const selectedModel = localStorage.getItem('ollama_model') || 'mistral:latest';
@@ -3500,7 +3541,7 @@ const ExamModal = ({ item, data, setData, selectedClass, selectedBook, teacherNa
     passageNLVHTitle: '', passageNLVHContent: '', passageNLVHAuthor: '',
     matrixConfig: { dochieu: { nb: 2, th: 2, vd: 1, vdc: 0 }, viet: { nb: 0, th: 0, vd: 1, vdc: 0 } },
     questions: [], answerKey: '', rubric: [], questionText: '',
-    questionMode: 'ai',
+    questionMode: 'ai', aiQuestionType: 'mix', // 'mix' | 'tn' | 'tl' — loại câu hỏi Đọc hiểu khi AI ra đề
     createdAt: new Date().toISOString()
   };
   const [form, setForm] = useState(item ? { ...defaultForm, ...item, matrixConfig: { ...defaultForm.matrixConfig, ...(item.matrixConfig || {}) } } : defaultForm);
@@ -3620,8 +3661,9 @@ YÊU CẦU:
 - CÂU HỎI PHẢI BÁM SÁT ĐOẠN TRÍCH TRÊN — không hỏi kiến thức ngoài văn bản
 - Câu Tiếng Việt/Thực hành: hỏi về biện pháp tu từ, từ loại, cấu trúc câu trong đoạn trích
 - Câu Viết phải liên quan đến nội dung, nhân vật, hoặc chủ đề của ngữ liệu
+- ${buildQuestionTypeInstruction(form.aiQuestionType)}
 
-ĐỊNH DẠNG OUTPUT (JSON thuần túy, KHÔNG markdown, KHÔNG backtick):
+ĐỊNH DẠNG OUTPUT (JSON thuần túy, KHÔNG markdown, KHÔNG backtick, xuống dòng trong chuỗi PHẢI viết là \\n):
 {
   "cauHoi": "PHẦN I. ĐỌC HIỂU (X điểm)\\nĐọc đoạn trích và thực hiện các yêu cầu:\\nCâu 1 (0.5đ): ...\\nCâu 2 (0.5đ): ...\\n...\\nPHẦN II. VIẾT (Y điểm)\\nCâu N (Xđ): ...",
   "dapAn": "PHẦN I. ĐỌC HIỂU\\nCâu 1: [đáp án cụ thể, nội dung đầy đủ]\\nCâu 2: [đáp án]\\n...\\nPHẦN II. VIẾT\\nCâu N: [dàn ý gợi ý + tiêu chí điểm chi tiết]"
@@ -3630,20 +3672,18 @@ YÊU CẦU:
     const result = await callGroqAPI(prompt, 2500);
     setGeneratingQsFromPassage(false);
     if (result.error) { alert('Lỗi AI: ' + result.error); return; }
-    try {
-      const txt = result.text.trim().replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/```\s*$/,'').trim();
-      const json = JSON.parse(txt);
+    const parsed = parseAIExamJson(result.text, ['cauHoi', 'dapAn']);
+    if (parsed.ok) {
       setForm(prev => ({
         ...prev,
-        questionText: json.cauHoi || prev.questionText,
-        answerKey: json.dapAn || prev.answerKey,
+        questionText: parsed.data.cauHoi || prev.questionText,
+        answerKey: parsed.data.dapAn || prev.answerKey,
         questions: [],
       }));
       alert('✅ AI đã tạo câu hỏi bám sát ngữ liệu! Kiểm tra trong "Xem trước" rồi nhấn "Lưu đề".');
-    } catch(e) {
-      // Nếu không parse được JSON, lưu text thô vào questionText
-      setForm(prev => ({ ...prev, questionText: result.text }));
-      alert('AI trả về text thô. Đã lưu vào ô Câu hỏi nhập tay — cô kiểm tra rồi chỉnh sửa nếu cần.');
+    } else {
+      // Không cứu được dữ liệu -> KHÔNG ghi đè gì cả, tránh làm hỏng đề bằng JSON thô.
+      alert('⚠️ AI trả về định dạng không đọc được. Cô bấm lại nút này để thử lần nữa, hoặc nhập câu hỏi vào ô "Câu hỏi nhập tay" bên dưới.');
     }
   };
 
@@ -3682,8 +3722,9 @@ YÊU CẦU:
 - Cấu trúc phần Đọc hiểu: ${struct.dh}
 - Cấu trúc phần Viết: ${struct.viet}
 - Tổng điểm: ${struct.total}
+- ${buildQuestionTypeInstruction(form.aiQuestionType)}
 
-ĐỊNH DẠNG OUTPUT (JSON thuần túy, không có markdown):
+ĐỊNH DẠNG OUTPUT (JSON thuần túy, không có markdown, xuống dòng trong chuỗi PHẢI viết là \\n):
 {
   "tieuDe": "tên đề ngắn gọn",
   "nguLieu": {
@@ -3699,24 +3740,25 @@ Chú ý: Câu hỏi Đọc hiểu phải bám sát ngữ liệu. Câu Viết ph�
 
     const result = await callGroqAPI(prompt, 2000);
     if (result.error) { alert('Lỗi AI: ' + result.error); setGeneratingFullExam(false); return; }
-    try {
-      const txt = result.text.trim().replace(/^```json\s*/,'').replace(/```\s*$/,'').trim();
-      const json = JSON.parse(txt);
+    const parsed = parseAIExamJson(result.text, ['tieuDe', 'cauHoi', 'dapAn']);
+    const nguLieu = parsed.ok && parsed.data.nguLieu && typeof parsed.data.nguLieu === 'object'
+      ? parsed.data.nguLieu
+      : parseAINestedObject(result.text, 'nguLieu', ['tieuDe', 'tacGia', 'noiDung']);
+    if (parsed.ok) {
       setForm(prev => ({
         ...prev,
-        title: prev.title || (json.tieuDe || `Đề ${loaiDe} Ngữ văn ${grade}`),
-        passageTitle: json.nguLieu?.tieuDe || prev.passageTitle,
-        passageAuthor: json.nguLieu?.tacGia || prev.passageAuthor,
-        passageContent: json.nguLieu?.noiDung || prev.passageContent,
-        questionText: json.cauHoi || prev.questionText,
-        answerKey: json.dapAn || prev.answerKey,
+        title: prev.title || (parsed.data.tieuDe || `Đề ${loaiDe} Ngữ văn ${grade}`),
+        passageTitle: nguLieu?.tieuDe || prev.passageTitle,
+        passageAuthor: nguLieu?.tacGia || prev.passageAuthor,
+        passageContent: nguLieu?.noiDung || prev.passageContent,
+        questionText: parsed.data.cauHoi || prev.questionText,
+        answerKey: parsed.data.dapAn || prev.answerKey,
         questions: [],
       }));
       alert('✅ AI đã sinh đề hoàn chỉnh! Nhấn "Xem trước" để kiểm tra rồi "Lưu đề".');
-    } catch(e) {
-      // Nếu không parse được JSON, thử dùng text thô
-      setForm(prev => ({ ...prev, answerKey: result.text }));
-      alert('AI trả về text thô (không phải JSON). Đã lưu vào phần Đáp án để cô chỉnh sửa.');
+    } else {
+      // Không cứu được dữ liệu -> KHÔNG ghi JSON thô vào đề, chỉ báo lỗi để cô thử lại.
+      alert('⚠️ AI trả về định dạng không đọc được. Cô bấm lại nút "AI SINH ĐỀ HOÀN CHỈNH" để thử lần nữa.');
     }
     setGeneratingFullExam(false);
   };
@@ -4084,6 +4126,20 @@ Chú ý: Câu hỏi Đọc hiểu phải bám sát ngữ liệu. Câu Viết ph�
 
               {form.questionMode !== 'manual' ? (
                 <div className="space-y-3">
+                  {/* ── Chọn loại câu hỏi Đọc hiểu TRƯỚC khi AI ra đề ── */}
+                  <div>
+                    <label className="block text-sm font-bold mb-1.5">🔘 Loại câu hỏi Đọc hiểu</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {QUESTION_TYPE_OPTIONS.map(opt => (
+                        <button key={opt.id} type="button" onClick={() => setForm({ ...form, aiQuestionType: opt.id })}
+                          title={opt.desc}
+                          className={`text-left px-3 py-2 rounded-lg border text-xs font-medium transition ${(form.aiQuestionType || 'mix') === opt.id ? 'bg-teal-600 border-teal-600 text-white shadow' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1">{QUESTION_TYPE_OPTIONS.find(o => o.id === (form.aiQuestionType || 'mix'))?.desc}</p>
+                  </div>
                   {/* ── Nút AI Sinh Đề Hoàn Chỉnh ── */}
                   <button onClick={generateFullExamAI} disabled={generatingFullExam}
                     className="w-full bg-gradient-to-r from-teal-600 via-emerald-500 to-cyan-500 text-white px-6 py-4 rounded-xl flex items-center justify-center gap-3 font-bold text-base hover:opacity-90 transition shadow disabled:opacity-60">
@@ -5512,6 +5568,7 @@ const AutoGenExamView = ({ data, setData, selectedClass, teacherName, schoolName
   const [selectedGenre, setSelectedGenre] = useState('van_hoc');
   const [selectedTheme, setSelectedTheme] = useState('');
   const [selectedExamType, setSelectedExamType] = useState('45p');
+  const [questionType, setQuestionType] = useState('mix'); // 'mix' | 'tn' | 'tl' — chọn TRƯỚC khi tạo
   const [generating, setGenerating] = useState(false);
   const [generatedExam, setGeneratedExam] = useState(null);
   const [preview, setPreview] = useState(false);
@@ -5549,40 +5606,39 @@ Nội dung:
 
 YÊU CẦU CẤU TRÚC ĐỀ (${totalScore} điểm — 2 PHẦN):
 
-PHẦN I. ĐỌC HIỂU (3.0 điểm) — 5 câu, câu hỏi gắn với ngữ liệu trên:
-  - Câu 1 (0.5đ) [Nhận biết — Trắc nghiệm]: Xác định thể loại/phương thức biểu đạt/ngôi kể
-  - Câu 2 (0.5đ) [Nhận biết — Trắc nghiệm]: Chi tiết, hình ảnh, từ ngữ đặc sắc trong văn bản
-  - Câu 3 (0.5đ) [Thông hiểu — Trắc nghiệm]: Ý nghĩa nội dung / biện pháp tu từ / cấu trúc câu
-  - Câu 4 (0.5đ) [Thông hiểu — Trắc nghiệm]: Phân tích ý nghĩa chi tiết / giải thích ngôn ngữ
-  - Câu 5 (1.0đ) [Vận dụng — Tự luận ngắn]: Rút ra bài học / liên hệ bản thân / nhận xét
+PHẦN I. ĐỌC HIỂU (3.0 điểm) — 5 câu, câu hỏi gắn với ngữ liệu trên. ${buildQuestionTypeInstruction(questionType)}
+  - Câu 1 (0.5đ) [Nhận biết]: Xác định thể loại/phương thức biểu đạt/ngôi kể
+  - Câu 2 (0.5đ) [Nhận biết]: Chi tiết, hình ảnh, từ ngữ đặc sắc trong văn bản
+  - Câu 3 (0.5đ) [Thông hiểu]: Ý nghĩa nội dung / biện pháp tu từ / cấu trúc câu
+  - Câu 4 (0.5đ) [Thông hiểu]: Phân tích ý nghĩa chi tiết / giải thích ngôn ngữ
+  - Câu 5 (1.0đ) [Vận dụng]: Rút ra bài học / liên hệ bản thân / nhận xét
 
 PHẦN II. VIẾT (7.0 điểm) — 1 bài viết hoàn chỉnh:
   - Câu 6 (${selectedExamType === '15p' ? '3.0đ' : '7.0đ'}) [Vận dụng cao]: Viết ${selectedExamType === '15p' ? 'đoạn văn nghị luận (150-200 chữ)' : 'bài văn nghị luận (400-600 chữ)'} về chủ đề gợi ra từ văn bản hoặc phân tích tác phẩm văn học liên quan
 
-ĐỊNH DẠNG OUTPUT (JSON thuần túy, KHÔNG markdown, KHÔNG backtick):
+ĐỊNH DẠNG OUTPUT (JSON thuần túy, KHÔNG markdown, KHÔNG backtick, xuống dòng trong chuỗi PHẢI viết là \\n):
 {
-  "cauHoi": "PHẦN I. ĐỌC HIỂU (3.0 điểm)\\nĐọc văn bản sau và thực hiện các yêu cầu:\\nCâu 1 (0.5đ): [câu hỏi]\\nA. ... B. ... C. ... D. ...\\nCâu 2 (0.5đ): [câu hỏi]\\nA. ... B. ... C. ... D. ...\\nCâu 3 (0.5đ): [câu hỏi]\\nA. ... B. ... C. ... D. ...\\nCâu 4 (0.5đ): [câu hỏi]\\nA. ... B. ... C. ... D. ...\\nCâu 5 (1.0đ): [câu hỏi tự luận]\\nPHẦN II. VIẾT (7.0 điểm)\\nCâu 6 (7.0đ): [đề bài viết]",
+  "cauHoi": "PHẦN I. ĐỌC HIỂU (3.0 điểm)\\nĐọc văn bản sau và thực hiện các yêu cầu:\\n${{
+    tn: 'Câu 1 (0.5đ): [câu hỏi]\\\\nA. ... B. ... C. ... D. ...\\\\nCâu 2 (0.5đ): [câu hỏi]\\\\nA. ... B. ... C. ... D. ...\\\\nCâu 3 (0.5đ): [câu hỏi]\\\\nA. ... B. ... C. ... D. ...\\\\nCâu 4 (0.5đ): [câu hỏi]\\\\nA. ... B. ... C. ... D. ...\\\\nCâu 5 (1.0đ): [câu hỏi]\\\\nA. ... B. ... C. ... D. ...',
+    tl: 'Câu 1 (0.5đ): [câu hỏi tự luận]\\\\nCâu 2 (0.5đ): [câu hỏi tự luận]\\\\nCâu 3 (0.5đ): [câu hỏi tự luận]\\\\nCâu 4 (0.5đ): [câu hỏi tự luận]\\\\nCâu 5 (1.0đ): [câu hỏi tự luận]',
+    mix: 'Câu 1 (0.5đ): [câu hỏi]\\\\nA. ... B. ... C. ... D. ...\\\\nCâu 2 (0.5đ): [câu hỏi]\\\\nA. ... B. ... C. ... D. ...\\\\nCâu 3 (0.5đ): [câu hỏi]\\\\nA. ... B. ... C. ... D. ...\\\\nCâu 4 (0.5đ): [câu hỏi]\\\\nA. ... B. ... C. ... D. ...\\\\nCâu 5 (1.0đ): [câu hỏi tự luận]',
+  }[questionType]}\\nPHẦN II. VIẾT (7.0 điểm)\\nCâu 6 (7.0đ): [đề bài viết]",
   "dapAn": "PHẦN I. ĐỌC HIỂU\\nCâu 1: [đáp án + giải thích]\\nCâu 2: [đáp án]\\nCâu 3: [đáp án]\\nCâu 4: [đáp án]\\nCâu 5: [gợi ý trả lời]\\nPHẦN II. VIẾT\\nCâu 6: [dàn ý gợi ý + tiêu chí chấm điểm]"
 }
 
-Chú ý: Câu hỏi Đọc hiểu PHẢI BÁM SÁT ngữ liệu. Câu trắc nghiệm phải có 4 lựa chọn A/B/C/D.`;
+Chú ý: Câu hỏi Đọc hiểu PHẢI BÁM SÁT ngữ liệu. Câu trắc nghiệm (nếu có) phải có 4 lựa chọn A/B/C/D.`;
 
       const result = await callGroqAPI(prompt, 2000);
       if (result.error) { alert(result.error); setGenerating(false); return; }
 
-      let cauHoi = '';
-      let dapAn = '';
-      try {
-        const txt = result.text.trim().replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/```\s*$/,'').trim();
-        const json = JSON.parse(txt);
-        cauHoi = json.cauHoi || '';
-        dapAn = json.dapAn || '';
-      } catch(e) {
-        // Fallback: nếu không parse được JSON, tách câu hỏi và đáp án từ text thô
-        const raw = result.text || '';
-        cauHoi = raw;
-        dapAn = raw;
+      const parsed = parseAIExamJson(result.text, ['cauHoi', 'dapAn']);
+      if (!parsed.ok) {
+        alert('⚠️ AI trả về định dạng không đọc được. Cô bấm "🤖 Tạo Đề Tự Động" lại để thử lần nữa.');
+        setGenerating(false);
+        return;
       }
+      const cauHoi = parsed.data.cauHoi || '';
+      const dapAn = parsed.data.dapAn || cauHoi;
 
       const exam = {
         id: Date.now(),
@@ -5657,6 +5713,19 @@ Chú ý: Câu hỏi Đọc hiểu PHẢI BÁM SÁT ngữ liệu. Câu trắc ngh
               {LOAI_DE.map(l => <option key={l.id} value={l.id}>{l.ten}</option>)}
             </select>
           </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-bold mb-2">🔘 Loại câu hỏi Đọc hiểu</label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {QUESTION_TYPE_OPTIONS.map(opt => (
+              <button key={opt.id} type="button" onClick={() => setQuestionType(opt.id)} title={opt.desc}
+                className={`text-left px-3 py-2 rounded-lg border text-xs font-medium transition ${questionType === opt.id ? 'bg-rose-600 border-rose-600 text-white shadow' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-slate-400 mt-1">{QUESTION_TYPE_OPTIONS.find(o => o.id === questionType)?.desc}</p>
         </div>
 
         {passagesForSelection.length === 0 && (
@@ -9573,23 +9642,47 @@ Trả lời bằng tiếng Việt, chuyên nghiệp, chi tiết.`;
   return result;
 };
 
+// 📝 Sinh đề nhanh qua lệnh /sinh-đề trong Trợ Lý AI — CÙNG chuẩn PHẦN I/PHẦN II GDPT 2018
+// như 2 module kia (không dùng JSON — tách bằng dấu mốc văn bản, tránh lỗi escape xuống dòng).
 const generateExamContent = async (topic, type, count) => {
-  const prompt = `Hãy tạo ${count} câu hỏi ${type === 'tln' ? 'tự luận' : 'trắc nghiệm'} về chủ đề "${topic}" cho học sinh THCS.
-${type === 'tn' ? 'Mỗi câu gồm: Câu hỏi + 4 đáp án A/B/C/D + Đáp án đúng' : 'Mỗi câu nên có: Yêu cầu rõ ràng + Gợi ý từng bước'}
+  const isEssayOnly = type === 'tln';
+  const qTypeText = isEssayOnly
+    ? 'Tất cả câu hỏi phần Đọc hiểu là dạng TỰ LUẬN (học sinh tự viết câu trả lời), KHÔNG dùng trắc nghiệm.'
+    : 'Các câu hỏi phần Đọc hiểu là trắc nghiệm 4 lựa chọn A/B/C/D (viết rõ 4 phương án ngay dưới mỗi câu, nêu đáp án đúng trong phần đáp án).';
+  const prompt = `Bạn là giáo viên Ngữ văn THCS chuyên nghiệp. Hãy soạn đề kiểm tra ${count} câu Đọc hiểu về chủ đề "${topic}", theo chuẩn GDPT 2018 gồm PHẦN I. ĐỌC HIỂU và PHẦN II. VIẾT (1 đề bài viết đoạn/bài văn liên quan chủ đề).
+${qTypeText}
+
+ĐỊNH DẠNG TRẢ LỜI (viết đúng 2 dấu mốc dưới đây, không dùng markdown, không dùng JSON):
+=== CÂU HỎI ===
+PHẦN I. ĐỌC HIỂU
+[các câu hỏi, mỗi câu ghi rõ số điểm]
+PHẦN II. VIẾT
+[đề bài viết]
+
+=== ĐÁP ÁN ===
+[đáp án + hướng dẫn chấm chi tiết cho từng câu, kể cả câu viết]
+
 Trả lời bằng tiếng Việt, chuyên nghiệp.`;
 
   let result = null;
   const useOllama = getUseOllama();
   if (useOllama) {
-    result = await callOllamaAPI(prompt, 600);
+    result = await callOllamaAPI(prompt, 1500);
   }
   if (!result || !result.success) {
     const groqKey = getGroqApiKey();
     if (groqKey) {
-      result = await callGroqAPI(prompt, 600);
+      result = await callGroqAPI(prompt, 1500);
     }
   }
-  return result;
+  if (!result || !result.success) return result;
+  // Tách câu hỏi / đáp án bằng dấu mốc — nếu AI quên mốc, dùng nguyên văn cho cả 2 (không tệ hơn trước).
+  const text = result.text || '';
+  const marker = '=== ĐÁP ÁN ===';
+  const idx = text.indexOf(marker);
+  const cauHoi = (idx >= 0 ? text.slice(0, idx) : text).replace('=== CÂU HỎI ===', '').trim();
+  const dapAn = (idx >= 0 ? text.slice(idx + marker.length) : text).trim();
+  return { ...result, cauHoi, dapAn };
 };
 
 const generateOutlineContent = async (topic) => {
@@ -9779,14 +9872,14 @@ Ví dụ: "Giải thích khái niệm...", "Gợi ý tiêu đề bài...", v.v.
               passageContent: '',
               matrixConfig: { dochieu: { nb: 0, th: 0, vd: count, vdc: 0 }, tiengviet: { nb: 0, th: 0, vd: 0, vdc: 0 }, viet: { nb: 0, th: 0, vd: 0, vdc: 0 } },
               questions: [],
-              questionText: result.text || '',
-              answerKey: result.text || '',
+              questionText: result.cauHoi || result.text || '',
+              answerKey: result.dapAn || result.text || '',
               createdAt: new Date().toISOString()
             };
             const newData = { ...data, exams: [...(data.exams || []), exam] };
             setData(newData);
             setMessages(prev => prev.slice(0, -1).concat([
-              { role: 'assistant', content: `✅ Đã sinh ${count} câu thành công!\n\n${result.text.substring(0, 300)}...\n\n💾 Đề đã được lưu trong tab "Đánh Giá - Kiểm Tra". Bấm vào đề để xem chi tiết!` }
+              { role: 'assistant', content: `✅ Đã sinh ${count} câu thành công!\n\n${(result.cauHoi || result.text).substring(0, 300)}...\n\n💾 Đề đã được lưu trong tab "Đánh Giá - Kiểm Tra". Bấm vào đề để xem chi tiết!` }
             ]));
           } else {
             setMessages(prev => prev.slice(0, -1).concat([
