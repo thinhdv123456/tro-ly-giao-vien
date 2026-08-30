@@ -40,14 +40,15 @@
     --c-ink: #4a2530;          /* Nâu mận ấm */
     --c-ink-soft: #6a4552;
     --c-border: #f0dcd0;
+    --app-fs: 17px;            /* 🔠 Cỡ chữ do cô Thu tự chỉnh (nút "Aa" trên thanh trên) */
   }
   * { box-sizing: border-box; }
+  html { font-size: var(--app-fs); }
   body {
     font-family: 'Be Vietnam Pro', 'Segoe UI', Tahoma, sans-serif;
     background: #fff7f4;
     color: var(--c-ink);
     font-weight: 400;
-    font-size: 16.5px;
     line-height: 1.55;
   }
   h1, h2, h3, h4 { font-family: 'Playfair Display', 'Be Vietnam Pro', serif; letter-spacing: -0.01em; }
@@ -60,6 +61,14 @@
   .text-slate-300 { color: #94a3b8 !important; }
   .text-slate-400 { color: #64748b !important; }
   .text-slate-500 { color: #475569 !important; }
+
+  /* 🔠 Chế độ "Chữ đậm hơn" — bật/tắt bằng nút Aa trên thanh trên */
+  html.text-strong { --c-ink-soft: #4a2530; }
+  html.text-strong body { font-weight: 500; }
+  html.text-strong h1, html.text-strong h2, html.text-strong h3, html.text-strong h4 { font-weight: 800; }
+  html.text-strong .text-slate-300 { color: #64748b !important; }
+  html.text-strong .text-slate-400 { color: #334155 !important; }
+  html.text-strong .text-slate-500 { color: #1e293b !important; }
 
   /* Sidebar: Thơ văn — kem-hồng ấm áp, trang nhã */
   .gradient-bg {
@@ -185,7 +194,7 @@
     border-radius: 2px;
   }
 
-  @media (max-width: 640px) { body { font-size: 15.5px; } }
+  @media (max-width: 640px) { html { font-size: calc(var(--app-fs) * 0.94); } }
   .zalo-preview { background: #ffffff; border: 1px solid #cbd5e1; border-radius: 12px; padding: 12px; font-family: 'Segoe UI', Tahoma, sans-serif; font-size: 14px; line-height: 1.5; white-space: pre-wrap; position: relative; }
   .zalo-preview::before { content: '💬 Preview Zalo'; position: absolute; top: -10px; left: 12px; background: #0068ff; color: white; font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
   .student-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; border: 1px solid #cbd5e1; margin: 2px; cursor: pointer; }
@@ -1851,6 +1860,59 @@ const MobileTabBar = ({ active, setActive, lastComposeTab }) => {
   );
 };
 
+// ============== 🔠 CỠ CHỮ & ĐỘ ĐẬM NHẠT (cô Thu tự chỉnh, lưu trên máy) ==============
+const FONT_SIZE_KEY = 'tro_ly_gv_font_size';
+const TEXT_BOLD_KEY = 'tro_ly_gv_text_bold';
+const FONT_SIZE_DEFAULT = 17, FONT_SIZE_MIN = 14, FONT_SIZE_MAX = 24;
+const FontSizeControl = () => {
+  const [fs, setFs] = React.useState(() => parseInt(localStorage.getItem(FONT_SIZE_KEY) || String(FONT_SIZE_DEFAULT), 10));
+  const [bold, setBold] = React.useState(() => localStorage.getItem(TEXT_BOLD_KEY) === '1');
+  const [open, setOpen] = React.useState(false);
+  React.useEffect(() => {
+    document.documentElement.style.setProperty('--app-fs', fs + 'px');
+    localStorage.setItem(FONT_SIZE_KEY, String(fs));
+  }, [fs]);
+  React.useEffect(() => {
+    document.documentElement.classList.toggle('text-strong', bold);
+    localStorage.setItem(TEXT_BOLD_KEY, bold ? '1' : '0');
+  }, [bold]);
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(o => !o)} title="Cỡ chữ & độ đậm nhạt"
+        className="flex items-center gap-0.5 px-3 py-2 rounded-xl text-sm font-bold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition">
+        <span style={{ fontSize: 11 }}>A</span><span>A</span>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 mt-2 w-72 bg-white border border-amber-200 rounded-2xl shadow-2xl p-4 z-40">
+            <p className="text-sm font-bold text-amber-900 mb-3 flex items-center gap-1.5"><Icon name="Type" size={16} /> Cỡ chữ &amp; độ đậm nhạt</p>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm" style={{ color: 'var(--c-ink-soft)' }}>Cỡ chữ</span>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setFs(v => Math.max(FONT_SIZE_MIN, v - 1))} className="w-9 h-9 rounded-lg bg-slate-100 hover:bg-slate-200 font-bold">A−</button>
+                <span className="text-sm font-mono w-6 text-center">{fs}</span>
+                <button onClick={() => setFs(v => Math.min(FONT_SIZE_MAX, v + 1))} className="w-9 h-9 rounded-lg bg-slate-100 hover:bg-slate-200 font-bold text-lg">A+</button>
+              </div>
+            </div>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm" style={{ color: 'var(--c-ink-soft)' }}>Chữ đậm hơn</span>
+              <button onClick={() => setBold(b => !b)}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold transition ${bold ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                {bold ? '✓ Đang bật' : 'Đang tắt'}
+              </button>
+            </div>
+            <button onClick={() => { setFs(FONT_SIZE_DEFAULT); setBold(false); }}
+              className="w-full text-xs text-center font-medium text-rose-600 hover:underline pt-1 border-t border-slate-100">
+              ↺ Về mặc định
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
 // ============== HEADER ==============
 const Header = ({ selectedClass, setSelectedClass, selectedBook, setSelectedBook, teacherName, setTeacherName, schoolName, setSchoolName, onMobileMenuToggle, setActive }) => {
   const now = new Date();
@@ -1916,6 +1978,7 @@ const Header = ({ selectedClass, setSelectedClass, selectedBook, setSelectedBook
           <span>{aiProvider || 'Chưa cài AI'}</span>
           <Icon name="Settings" size={12} />
         </button>
+        <FontSizeControl />
         <div className="flex items-center gap-1 pl-2 border-l border-rose-100">
           <button onClick={exportAllData} title="Xuất toàn bộ dữ liệu ra file .json"
             className="px-3 py-2 rounded-xl text-sm font-medium bg-gradient-to-r from-teal-600 to-teal-700 text-white hover:shadow-md flex items-center gap-1 transition">
@@ -2036,12 +2099,12 @@ const BatchGradeView = ({ cls, asg, fbUser, data, onBack }) => {
         <button onClick={onBack} className="text-rose-400 hover:text-rose-600"><Icon name="ArrowLeft" size={16} /></button>
         <div className="flex-1 min-w-0">
           <p className="text-xs font-semibold text-rose-900 truncate">{asg.title}</p>
-          <p className="text-[9px]" style={{color:'#6a4552'}}>⏱ {asg.durationMin}' · {expired ? 'Đã đóng' : `Hạn ${ocFmt(asg.deadline)}`} · {totalSubs} bài nộp</p>
+          <p className="text-[9px]" style={{color:'var(--c-ink-soft)'}}>⏱ {asg.durationMin}' · {expired ? 'Đã đóng' : `Hạn ${ocFmt(asg.deadline)}`} · {totalSubs} bài nộp</p>
         </div>
       </div>
 
       <div className="flex items-center gap-2 px-3 py-1.5 bg-rose-50 border-b border-rose-100">
-        <span className="text-[9px]" style={{color:'#6a4552'}}>{graded}/{totalSubs} đã chấm · {released} đã gửi</span>
+        <span className="text-[9px]" style={{color:'var(--c-ink-soft)'}}>{graded}/{totalSubs} đã chấm · {released} đã gửi</span>
         <div className="flex-1" />
         <button onClick={aiGradeAll} disabled={aiRunning}
           className="text-[10px] px-2.5 py-1 rounded-lg font-medium text-white" style={{background: aiRunning ? '#ccc' : '#be185d'}}>
@@ -2071,7 +2134,7 @@ const BatchGradeView = ({ cls, asg, fbUser, data, onBack }) => {
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-1.5">
                   <span className="text-[11px] font-semibold text-rose-900">{sub.studentName}</span>
-                  <span className="text-[8px]" style={{color:'#6a4552'}}>nộp {ocFmt(sub.submittedAt)}</span>
+                  <span className="text-[8px]" style={{color:'var(--c-ink-soft)'}}>nộp {ocFmt(sub.submittedAt)}</span>
                 </div>
                 {isReleased
                   ? <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">✓ Đã gửi</span>
@@ -2093,7 +2156,7 @@ const BatchGradeView = ({ cls, asg, fbUser, data, onBack }) => {
               ) : (
                 <div className="flex items-center gap-1.5 mb-1.5">
                   {sub.answer && <p className="flex-1 text-[9px] p-1 rounded-lg bg-slate-50 border border-slate-100 truncate" style={{color:'#5a3a44'}}>{sub.answer.slice(0,80)}{sub.answer.length>80?'...':''}</p>}
-                  {sub.images && sub.images.length > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100" style={{color:'#6a4552'}}>📷 {sub.images.length} ảnh</span>}
+                  {sub.images && sub.images.length > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100" style={{color:'var(--c-ink-soft)'}}>📷 {sub.images.length} ảnh</span>}
                   {(sub.answer || (sub.images && sub.images.length > 0)) && (
                     <button onClick={() => setExpandedSub(sub.id)} className="text-[8px] px-1.5 py-0.5 rounded bg-rose-50 text-rose-600 flex-shrink-0">Xem bài ▼</button>
                   )}
@@ -2101,7 +2164,7 @@ const BatchGradeView = ({ cls, asg, fbUser, data, onBack }) => {
               )}
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1">
-                  <span className="text-[9px] font-medium" style={{color:'#6a4552'}}>Điểm:</span>
+                  <span className="text-[9px] font-medium" style={{color:'var(--c-ink-soft)'}}>Điểm:</span>
                   <input type="number" step="0.25" min="0" max="10" value={g.score ?? ''} disabled={isReleased}
                     onChange={e => updateGrade(sub.id, 'score', e.target.value)}
                     className="w-12 px-1.5 py-0.5 border border-rose-200 rounded-lg text-[10px] text-center" />
@@ -2185,7 +2248,7 @@ const ZaloChatTab = ({ fbUser, setActive }) => {
     <div className="fade-in max-w-xl mx-auto p-6">
       <div className="soft-card p-8 text-center">
         <div className="text-4xl mb-3">💬</div>
-        <p className="text-sm" style={{color:'#6a4552'}}>Đăng nhập để xem tin nhắn lớp</p>
+        <p className="text-sm" style={{color:'var(--c-ink-soft)'}}>Đăng nhập để xem tin nhắn lớp</p>
         <button onClick={() => setActive('settings')} className="btn-primary mt-3 px-4 py-2 rounded-xl text-sm">🔐 Đăng nhập</button>
       </div>
     </div>
@@ -2198,7 +2261,7 @@ const ZaloChatTab = ({ fbUser, setActive }) => {
           style={{background:'linear-gradient(135deg,#be185d,#ec4899)'}}>💬</div>
         <div>
           <h1 className="text-lg font-bold font-display" style={{color:'#9f1239'}}>Tin nhắn lớp</h1>
-          <p className="text-[11px]" style={{color:'#6a4552'}}>{fbClasses.length} lớp · bấm vào lớp để nhắn tin</p>
+          <p className="text-[11px]" style={{color:'var(--c-ink-soft)'}}>{fbClasses.length} lớp · bấm vào lớp để nhắn tin</p>
         </div>
       </div>
 
@@ -2215,9 +2278,9 @@ const ZaloChatTab = ({ fbUser, setActive }) => {
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-semibold text-rose-900 truncate">{cls.name}</span>
-                  {lm && <span className="text-[10px] flex-shrink-0" style={{color:'#6a4552'}}>{fmtAgo(lm.at)}</span>}
+                  {lm && <span className="text-[10px] flex-shrink-0" style={{color:'var(--c-ink-soft)'}}>{fmtAgo(lm.at)}</span>}
                 </div>
-                <p className="text-xs truncate" style={{color:'#6a4552'}}>
+                <p className="text-xs truncate" style={{color:'var(--c-ink-soft)'}}>
                   {lm ? `${lm.fromName||''}: ${(lm.text||'').slice(0,40)}` : 'Chưa có tin nhắn'}
                 </p>
               </div>
@@ -2228,7 +2291,7 @@ const ZaloChatTab = ({ fbUser, setActive }) => {
         {fbClasses.length === 0 && (
           <div className="soft-card p-8 text-center">
             <div className="text-3xl mb-2">📭</div>
-            <p className="text-sm" style={{color:'#6a4552'}}>Chưa có lớp nào. Tạo lớp ở Trang chủ để bắt đầu nhắn tin.</p>
+            <p className="text-sm" style={{color:'var(--c-ink-soft)'}}>Chưa có lớp nào. Tạo lớp ở Trang chủ để bắt đầu nhắn tin.</p>
           </div>
         )}
       </div>
@@ -2457,7 +2520,7 @@ const Dashboard = ({ data, setData, setActive, fbUser, onSignOut }) => {
           style={{background:'linear-gradient(135deg,#be185d,#ec4899)'}}>🌐</div>
         <div>
           <h1 className="text-xl font-bold font-display" style={{color:'#9f1239'}}>Lớp Học Kết Nối</h1>
-          <p className="text-xs" style={{color:'#6a4552'}}>Chào cô Thu · {dateStr}</p>
+          <p className="text-xs" style={{color:'var(--c-ink-soft)'}}>Chào cô Thu · {dateStr}</p>
         </div>
         {fbUser && <button onClick={onSignOut}
           className="ml-auto px-3 py-1.5 rounded-xl text-xs font-medium border border-rose-200 text-rose-500 hover:bg-rose-50 transition">
@@ -2472,7 +2535,7 @@ const Dashboard = ({ data, setData, setActive, fbUser, onSignOut }) => {
           { label: 'Bài đã chấm', val: gradings.length, icon: '✅' },
         ].map((k,i) => (
           <div key={i} className="soft-card p-4">
-            <p className="text-xs" style={{color:'#6a4552'}}>{k.icon} {k.label}</p>
+            <p className="text-xs" style={{color:'var(--c-ink-soft)'}}>{k.icon} {k.label}</p>
             <p className="text-2xl font-bold font-display mt-1" style={{color:'#4a2530'}}>{k.val}</p>
           </div>
         ))}
@@ -2480,7 +2543,7 @@ const Dashboard = ({ data, setData, setActive, fbUser, onSignOut }) => {
       <div className="soft-card p-8 text-center mb-4" style={{borderColor:'#f7c9dc'}}>
         <div className="text-4xl mb-3">🏫</div>
         <h3 className="text-lg font-bold text-rose-900 mb-2 font-display">{!fbUser ? 'Đăng nhập để xem lớp' : 'Chưa có lớp học nào'}</h3>
-        <p className="text-sm mb-5" style={{color:'#6a4552'}}>{!fbUser ? 'Vào Cài đặt → Đăng nhập đám mây để hiện các lớp của cô' : 'Tạo lớp trong Lớp Học Kết Nối để bảng điều khiển hiện số liệu thật'}</p>
+        <p className="text-sm mb-5" style={{color:'var(--c-ink-soft)'}}>{!fbUser ? 'Vào Cài đặt → Đăng nhập đám mây để hiện các lớp của cô' : 'Tạo lớp trong Lớp Học Kết Nối để bảng điều khiển hiện số liệu thật'}</p>
         <button onClick={() => !fbUser ? setActive('settings') : setShowAddClass(true)} className="btn-primary px-6 py-2.5 rounded-xl font-medium text-sm">
           {!fbUser ? '🔐 Đăng nhập' : '＋ Tạo lớp đầu tiên'}
         </button>
@@ -2500,7 +2563,7 @@ const Dashboard = ({ data, setData, setActive, fbUser, onSignOut }) => {
 
   if (loading) return (
     <div className="fade-in flex items-center justify-center py-20">
-      <div className="text-center"><div className="text-4xl mb-3 animate-pulse">🌸</div><p className="text-sm" style={{color:'#6a4552'}}>Đang tải bảng điều khiển...</p></div>
+      <div className="text-center"><div className="text-4xl mb-3 animate-pulse">🌸</div><p className="text-sm" style={{color:'var(--c-ink-soft)'}}>Đang tải bảng điều khiển...</p></div>
     </div>
   );
 
@@ -2515,7 +2578,7 @@ const Dashboard = ({ data, setData, setActive, fbUser, onSignOut }) => {
           style={{background:'linear-gradient(135deg,#be185d,#ec4899)'}}>🌐</div>
         <div>
           <h1 className="text-lg md:text-xl font-bold font-display" style={{color:'#9f1239'}}>Lớp Học Kết Nối</h1>
-          <p className="text-[11px]" style={{color:'#6a4552'}}>Chào cô Thu · {dateStr}</p>
+          <p className="text-[11px]" style={{color:'var(--c-ink-soft)'}}>Chào cô Thu · {dateStr}</p>
         </div>
         <div className="ml-auto flex items-center gap-2">
           <button onClick={() => setShowAddClass(true)}
@@ -2538,7 +2601,7 @@ const Dashboard = ({ data, setData, setActive, fbUser, onSignOut }) => {
           { label: 'Tin nhắn mới',  val: totalMsgs, accent: totalMsgs > 0, color: '#d97706' },
         ].map((k,i) => (
           <div key={i} className="soft-card p-3" style={k.accent ? {borderColor:'#f7c9dc'} : {}}>
-            <p className="text-[10px]" style={{color: k.accent ? k.color : '#6a4552'}}>{k.label}</p>
+            <p className="text-[10px]" style={{color: k.accent ? k.color : 'var(--c-ink-soft)'}}>{k.label}</p>
             <p className="text-xl font-bold font-display mt-0.5" style={{color: k.accent ? k.color : '#4a2530'}}>{k.val}</p>
           </div>
         ))}
@@ -2574,7 +2637,7 @@ const Dashboard = ({ data, setData, setActive, fbUser, onSignOut }) => {
         <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg text-white shrink-0" style={{background:'linear-gradient(135deg,#0f766e,#be185d)'}}>🎒</div>
         <div className="flex-1 min-w-0">
           <p className="text-xs font-semibold text-rose-900">Học Cùng Cô Thu</p>
-          <p className="text-[10px] truncate" style={{color:'#6a4552'}}>trolygiaovien.netlify.app/cong</p>
+          <p className="text-[10px] truncate" style={{color:'var(--c-ink-soft)'}}>trolygiaovien.netlify.app/cong</p>
         </div>
         <button onClick={() => {
           const url = 'https://trolygiaovien.netlify.app/cong';
@@ -2597,13 +2660,13 @@ const Dashboard = ({ data, setData, setActive, fbUser, onSignOut }) => {
                   background: storageInfo.percent > 80 ? '#e11d48' : storageInfo.percent > 50 ? '#d97706' : '#0f766e'
                 }} />
               </div>
-              <span className="text-[9px] font-mono flex-shrink-0" style={{color:'#6a4552'}}>{storageInfo.estTotalKB < 1024 ? storageInfo.estTotalKB + ' KB' : (storageInfo.estTotalKB / 1024).toFixed(1) + ' MB'} / 1 GiB</span>
+              <span className="text-[9px] font-mono flex-shrink-0" style={{color:'var(--c-ink-soft)'}}>{storageInfo.estTotalKB < 1024 ? storageInfo.estTotalKB + ' KB' : (storageInfo.estTotalKB / 1024).toFixed(1) + ' MB'} / 1 GiB</span>
             </div>
-            <span className="text-[9px]" style={{color:'#6a4552'}}>{storageOpen ? '▲' : '▼'}</span>
+            <span className="text-[9px]" style={{color:'var(--c-ink-soft)'}}>{storageOpen ? '▲' : '▼'}</span>
           </button>
           {storageOpen && (
             <div className="px-3 pb-2.5 border-t border-rose-100">
-              <div className="flex flex-wrap gap-3 text-[10px] mt-2 mb-2" style={{color:'#6a4552'}}>
+              <div className="flex flex-wrap gap-3 text-[10px] mt-2 mb-2" style={{color:'var(--c-ink-soft)'}}>
                 <span>📝 {storageInfo.totalSubs} bài nộp</span>
                 <span>📷 {storageInfo.totalImgs} ảnh</span>
                 <span>💬 {storageInfo.totalMsgs} tin nhắn</span>
@@ -2640,7 +2703,7 @@ const Dashboard = ({ data, setData, setActive, fbUser, onSignOut }) => {
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-semibold" style={{background:gColor}}>{g}</div>
                   <span className="text-xs font-semibold">Khối {g}</span>
-                  <span className="text-[10px] ml-auto" style={{color:'#6a4552'}}>{gClasses.length} lớp · {gStudents} HS</span>
+                  <span className="text-[10px] ml-auto" style={{color:'var(--c-ink-soft)'}}>{gClasses.length} lớp · {gStudents} HS</span>
                   {gPend > 0 && <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-medium">{gPend} chờ chấm</span>}
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -2662,7 +2725,7 @@ const Dashboard = ({ data, setData, setActive, fbUser, onSignOut }) => {
                               style={{background: `${gColor}18`, color: gColor}}>{abbr}</div>
                             <div>
                               <p className="font-semibold text-xs text-rose-900">{cls.name}</p>
-                              <p className="text-[10px]" style={{color:'#6a4552'}}>{students} HS · <span className="font-mono">{cls.id}</span></p>
+                              <p className="text-[10px]" style={{color:'var(--c-ink-soft)'}}>{students} HS · <span className="font-mono">{cls.id}</span></p>
                             </div>
                           </div>
                           {st.hasDue
@@ -2675,7 +2738,7 @@ const Dashboard = ({ data, setData, setActive, fbUser, onSignOut }) => {
                           <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{background:`${gColor}15`}}>
                             <div className="h-full rounded-full" style={{width:`${Math.min(Math.round(pct*100),100)}%`, background:gColor}} />
                           </div>
-                          <span className="text-[9px]" style={{color:'#6a4552'}}>{totalSubs}/{students}</span>
+                          <span className="text-[9px]" style={{color:'var(--c-ink-soft)'}}>{totalSubs}/{students}</span>
                         </div>
                         {(asgs > 0 || pend > 0) && (
                           <div className="flex gap-1 flex-wrap mb-2">
@@ -2715,9 +2778,9 @@ const Dashboard = ({ data, setData, setActive, fbUser, onSignOut }) => {
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-center">
                       <span className="text-xs font-semibold text-rose-900 truncate">{cls.name}</span>
-                      {lm && <span className="text-[9px] flex-shrink-0" style={{color:'#6a4552'}}>{fmtAgo(lm.at)}</span>}
+                      {lm && <span className="text-[9px] flex-shrink-0" style={{color:'var(--c-ink-soft)'}}>{fmtAgo(lm.at)}</span>}
                     </div>
-                    <p className="text-[10px] truncate" style={{color:'#6a4552'}}>
+                    <p className="text-[10px] truncate" style={{color:'var(--c-ink-soft)'}}>
                       {lm ? `${lm.fromName||''}: ${(lm.text||'').slice(0,30)}` : 'Chưa có tin nhắn'}
                     </p>
                   </div>
@@ -2741,7 +2804,7 @@ const Dashboard = ({ data, setData, setActive, fbUser, onSignOut }) => {
                 style={{background:gColor}}>{(vc.name||'').replace(/[^0-9A-Za-zÀ-ỹ]/g,'').toUpperCase()}</div>
               <div>
                 <p className="font-semibold text-rose-900">{vc.name}</p>
-                <p className="text-[11px]" style={{color:'#6a4552'}}>{vcStudents.length} học sinh · Mã lớp: <span className="font-mono">{vc.id}</span></p>
+                <p className="text-[11px]" style={{color:'var(--c-ink-soft)'}}>{vcStudents.length} học sinh · Mã lớp: <span className="font-mono">{vc.id}</span></p>
               </div>
               <button onClick={() => { navigator.clipboard.writeText(vc.id); alert('Đã copy mã lớp!'); }}
                 className="ml-auto text-[10px] px-2 py-1 bg-rose-50 rounded-lg text-rose-600 hover:bg-rose-100">📋 Copy mã</button>
@@ -2772,7 +2835,7 @@ const Dashboard = ({ data, setData, setActive, fbUser, onSignOut }) => {
                         {expired ? <span className="text-[9px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Đã đóng</span>
                           : <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Đang mở</span>}
                       </div>
-                      <p className="text-[10px]" style={{color:'#6a4552'}}>⏱ {a.durationMin} phút · Hạn {ocFmt(a.deadline)}</p>
+                      <p className="text-[10px]" style={{color:'var(--c-ink-soft)'}}>⏱ {a.durationMin} phút · Hạn {ocFmt(a.deadline)}</p>
                     </button>
                   );
                 })}
