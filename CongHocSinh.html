@@ -166,9 +166,20 @@ const getOccasion = (now = new Date()) => {
 // ============== TÁCH ĐỀ THÀNH TỪNG CÂU (mỗi câu 1 ô trả lời) ==============
 const parseQuestions = (body) => {
   const text = String(body || '').replace(/\r\n/g, '\n');
-  const re = /(?:^|\n)[ \t]*(Câu\s*\d+)[ \t]*[\.\:\)]?/gi;
-  const marks = []; let m;
+  // 1) Ưu tiên: "Câu N" đầu dòng (chấp nhận có **, -, >, # đứng trước)
+  const re = /(?:^|\n)[ \t>*#\-]*\**[ \t]*(Câu\s*\d+)[ \t]*[\.\:\)]?/gi;
+  let marks = []; let m;
   while ((m = re.exec(text))) { marks.push({ index: m.index + m[0].indexOf('Câu'), label: m[1].replace(/\s+/g, ' ').trim() }); }
+  // 2) Không thấy "Câu N" -> thử nhận đánh số 1. 2. 3.) liên tiếp bắt đầu từ 1
+  if (marks.length === 0) {
+    const re2 = /(?:^|\n)[ \t>*#\-]*\**[ \t]*(\d{1,2})[ \t]*[\.\)][ \t]+/g;
+    const cand = []; let m2;
+    while ((m2 = re2.exec(text))) { cand.push({ index: m2.index + m2[0].search(/\d/), num: parseInt(m2[1], 10) }); }
+    // chỉ tách khi đánh số đúng 1,2,3... liên tiếp (tránh nhầm số trong ngữ liệu)
+    if (cand.length >= 2 && cand.every((c, i) => c.num === i + 1)) {
+      marks = cand.map(c => ({ index: c.index, label: 'Câu ' + c.num }));
+    }
+  }
   if (marks.length === 0) return { single: true, intro: '', questions: [{ label: '', prompt: text.trim() }] };
   const intro = text.slice(0, marks[0].index).trim();
   const questions = marks.map((mk, i) => {
@@ -177,7 +188,7 @@ const parseQuestions = (body) => {
   });
   return { single: false, intro, questions };
 };
-const stripLabel = (t) => String(t || '').replace(/^\s*Câu\s*\d+\s*[\.\:\)]?\s*/i, '').trim();
+const stripLabel = (t) => String(t || '').replace(/^\s*(?:Câu\s*\d+|\d{1,2})\s*[\.\:\)]?\s*/i, '').trim();
 const countChars = (s) => (s || '').length;
 const countWords = (s) => { const t = (s || '').trim(); return t ? t.split(/\s+/).length : 0; };
 
