@@ -1177,6 +1177,57 @@ const exportToWord = (elementId, filename) => {
   } catch (err) { alert('Lỗi Word: ' + err.message); }
 };
 
+// ============== 📖 KIẾN THỨC VỀ CHƯƠNG TRÌNH (để Trợ Lý AI hướng dẫn người dùng) ==============
+// ⚠️ QUY TẮC BẮT BUỘC cho AI/lập trình viên sửa code sau này:
+//   - Danh sách menu (APP_MENU_SUMMARY) tự lấy từ MENU_ITEMS -> KHÔNG BAO GIỜ lạc hậu, không cần sửa tay.
+//   - Nếu một tab trong MENU_ITEMS đã code xong (không còn hiện PhasePlaceholder), phải thêm id của nó
+//     vào mảng MENU_IMPLEMENTED_IDS ngay bên dưới, để Trợ Lý AI biết tab đó đã dùng được.
+//   - Phần APP_HELP_CONTEXT_DETAILS bên dưới là mô tả CHI TIẾT viết tay (không tự cập nhật được) —
+//     mỗi khi thêm/đổi tính năng lớn (sub-tab mới, đổi luồng dùng AI, đổi nút...), PHẢI sửa đoạn văn bản
+//     tương ứng ở đây, nếu không Trợ Lý AI trong chat sẽ hướng dẫn người dùng sai/cũ.
+const MENU_IMPLEMENTED_IDS = ['dashboard', 'planning', 'lesson', 'exam', 'classes', 'online', 'library', 'settings'];
+const APP_MENU_SUMMARY = (() => {
+  const lines = [];
+  MENU_ITEMS.filter(m => m.group === 'pinned').forEach(m => {
+    lines.push(`- 📌 ${m.label} (ghim đầu menu)${MENU_IMPLEMENTED_IDS.includes(m.id) ? '' : ' — [CHƯA HOẠT ĐỘNG, sắp có]'}`);
+  });
+  MENU_GROUPS.forEach(g => {
+    const items = MENU_ITEMS.filter(m => m.group === g);
+    if (!items.length) return;
+    lines.push(`- Nhóm "${g}": ` + items.map(m => m.label + (MENU_IMPLEMENTED_IDS.includes(m.id) ? '' : ' [CHƯA HOẠT ĐỘNG, sắp có]')).join(', '));
+  });
+  return lines.join('\n');
+})();
+const APP_HELP_CONTEXT_DETAILS = `
+1. 🏠 Tổng quan (Dashboard): xem tổng quan số lớp, bài đang giao, bài chờ chấm, tin nhắn mới; danh sách lớp theo khối; link chia sẻ "Cổng Lớp Học" cho học sinh.
+
+2. ✍️ Lập kế hoạch + Soạn giáo án: "Lập kế hoạch" soạn kế hoạch bài dạy theo khung GDPT 2018; "Soạn giáo án" soạn giáo án chi tiết, xuất PDF/PPTX.
+
+3. 📝 Đánh giá - Kiểm tra (ExamTab) — có các tab con bên trong: "Đề kiểm tra" (tạo đề theo ma trận × mức độ Bloom, chọn ngữ liệu, trắc nghiệm + tự luận, có rubric, xem trước Đề/Đáp án/Rubric), "🤖 Ra Đề Tự Động" (AI tự sinh đề theo loại văn bản: Văn học/Thông tin/Nghị luận/Hành chính), "📚 Kho Ngữ Liệu" (thêm/duyệt/dán nhanh ngữ liệu, có sẵn kho mẫu), "Ma trận đề", "Ngân hàng câu hỏi" (tự luận + trắc nghiệm A/B/C/D).
+
+4. 👥 CÓ HAI HỆ THỐNG QUẢN LÝ LỚP SONG SONG, đừng nhầm:
+   - "Lớp Học Kết Nối" (mục ghim đầu menu, cần đăng nhập tài khoản đám mây ở Cài đặt): hệ thống MỚI, dữ liệu đồng bộ qua đám mây (Firebase) theo thời gian thực — quản lý lớp, giao bài, học sinh nộp bài/nhắn tin qua "Cổng Lớp Học" (link /cong), cô chấm bài (chấm tay hoặc AI, bài chụp ảnh chữ viết tay BẮT BUỘC dùng nguồn AI "Claude" vì Groq/Ollama không đọc được ảnh), xem báo cáo lớp. Đây là hướng đang dùng chính.
+   - "Sổ điểm · Zalo" (mục riêng trong menu): hệ thống CŨ hơn, lưu cục bộ trên máy (không đồng bộ đám mây), có 4 phần: Quản lý lớp, Chấm bài, Zalo tương tác (soạn tin nhắn rồi copy-paste thủ công sang Zalo, không tự động), Báo cáo.
+
+5. 🎒 Cổng Lớp Học (đường dẫn riêng /cong, KHÔNG nằm trong menu chính — dùng để CHIA SẺ CHO HỌC SINH/PHỤ HUYNH, không phải cho giáo viên dùng): học sinh nhập mã lớp + họ tên để vào, xem bài tập, nộp bài (gõ chữ hoặc chụp ảnh), xem điểm & nhận xét, nhắn tin riêng với cô, có thể "Cài vào màn hình chính" như 1 app điện thoại.
+
+6. 📚 Thư viện: tài liệu tham khảo có sẵn (hướng dẫn giảng dạy, mẫu văn bản...).
+
+7. ⚙️ Cài đặt AI: chọn 1 trong 3 nguồn AI — "Claude" (chất lượng cao nhất, đọc được ảnh, cần API Key trả phí, dùng cho chấm bài ảnh), "Groq" (nhanh, MIỄN PHÍ, cần API Key miễn phí ở console.groq.com, không đọc được ảnh — đang là nguồn chạy chính Trợ Lý AI chat này), "Ollama" (chạy AI ngay trên máy, offline, miễn phí, cần tự cài phần mềm Ollama). Có nút xuất/nhập dữ liệu ra file, đăng nhập tài khoản đám mây để đồng bộ nhiều máy.
+
+NÚT "Aa" trên thanh trên cùng: chỉnh cỡ chữ to/nhỏ (14-24px) + bật/tắt chế độ "chữ đậm hơn", tự nhớ lựa chọn.
+
+TRỢ LÝ AI (chính là bạn, nút hồng góc dưới sidebar): hỗ trợ lệnh nhanh bắt đầu bằng "/" — /soạn-bài [chủ đề], /sinh-đề [số] [tn/tln], /tạo-outline [tên bài], /gợi-ý-hoạt-động [chủ đề], /chấm-bài [nội dung] — hoặc chat hỏi đáp bình thường.`;
+const APP_HELP_CONTEXT = `Bạn là "Trợ Lý AI" gắn liền bên trong phần mềm "Trợ Lý Giáo Viên Ngữ Văn THCS" (phiên bản ${APP_VERSION}) — hãy tự nhận mình là một phần của chương trình này, KHÔNG nói "tôi không thấy được phần mềm của bạn". Dưới đây là chức năng của chương trình để hướng dẫn người dùng khi họ hỏi cách dùng:
+
+DANH SÁCH MENU BÊN TRÁI HIỆN TẠI (lấy trực tiếp từ code app đang chạy, luôn đúng với bản mới nhất kể cả sau khi cập nhật):
+${APP_MENU_SUMMARY}
+
+MÔ TẢ CHI TIẾT TỪNG MỤC (có thể hơi cũ hơn danh sách menu ở trên nếu app vừa được thêm tính năng mới, nhưng vẫn là nguồn tham khảo chính):
+${APP_HELP_CONTEXT_DETAILS}
+
+Khi người dùng hỏi "cách dùng", "chỗ này ở đâu", "làm sao để..." — hãy trả lời cụ thể theo đúng cấu trúc menu trên, chỉ rõ tên tab/nút bấm bằng tiếng Việt, ngắn gọn dễ hiểu cho giáo viên không rành công nghệ. Nếu người dùng hỏi về một mục có gắn "[CHƯA HOẠT ĐỘNG, sắp có]", hãy nói rõ tính năng đó đang phát triển, chưa dùng được.`;
+
 // ============== GROQ + OLLAMA API INTEGRATION ==============
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GROQ_MODEL = 'openai/gpt-oss-120b';
@@ -9830,19 +9881,21 @@ Ví dụ: "Giải thích khái niệm...", "Gợi ý tiêu đề bài...", v.v.
         }
       } else {
         // ===== GENERAL CHAT =====
-        const prompt = `Bạn là trợ lý giáo viên Tiếng Việt THCS thân thiện. Trả lời câu hỏi sau bằng Tiếng Việt (2-3 đoạn, hữu ích, chuyên nghiệp):
+        const prompt = `${APP_HELP_CONTEXT}
 
+---
+Câu hỏi của cô giáo (trả lời bằng Tiếng Việt, ngắn gọn, hữu ích, chuyên nghiệp):
 ${userMessage}`;
 
         let result = null;
         const useOllama = getUseOllama();
         if (useOllama) {
-          result = await callOllamaAPI(prompt, 300);
+          result = await callOllamaAPI(prompt, 500);
         }
         if (!result || !result.success) {
           const groqKey = getGroqApiKey();
           if (groqKey) {
-            result = await callGroqAPI(prompt, 300);
+            result = await callGroqAPI(prompt, 500);
           }
         }
 

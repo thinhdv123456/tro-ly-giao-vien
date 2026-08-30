@@ -179,6 +179,8 @@ const LOAI_VAN_BAN = [
 4. **Babel verify** sau mỗi lần sửa file lớn (dùng script kiểm tra braces/parens/brackets)
 5. **Khi tạo file mới**, lưu vào `/sessions/youthful-quirky-turing/mnt/TRO LY GIAO VIEN/` và link `computer://` để cô mở
 6. **Tránh lặp lại công việc đã làm** — đọc file hiện tại trước khi sửa
+7. **⭐ Cập nhật `APP_HELP_CONTEXT_DETAILS`** (trong `TroLyGiaoVien_Phase4_REFACTORED.html`, gần `GROQ_MODEL`) mỗi khi thêm/đổi tính năng lớn (sub-tab mới, đổi luồng dùng AI, đổi nút chính...). Đây là phần mô tả app mà "Trợ Lý AI" (chat trong app) dùng để hướng dẫn người dùng — không tự cập nhật được, phải sửa tay. Riêng danh sách menu (`APP_MENU_SUMMARY`) đã tự lấy từ `MENU_ITEMS` nên không cần sửa, chỉ cần thêm id vào `MENU_IMPLEMENTED_IDS` khi 1 tab đã code xong.
+8. **Đồng bộ `docs/`** (bản GitHub Pages dự phòng) mỗi khi push thay đổi lớn cho `TroLyGiaoVien_Phase4_REFACTORED.html` hoặc `CongHocSinh.html` — copy đè vào `docs/index.html` và `docs/cong/index.html` rồi push cùng lúc, để 2 host (Netlify chính + GitHub Pages dự phòng) luôn khớp nhau.
 
 ---
 
