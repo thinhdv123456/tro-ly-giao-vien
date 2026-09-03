@@ -31,3 +31,6 @@ DuLieu/zalo_reader_state.json
 
 # Thư mục build tạm của Netlify
 dist/
+
+# Thư mục làm việc tạm của các agent Claude Code chạy song song
+.claude/worktrees/
