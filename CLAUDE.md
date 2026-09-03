@@ -1,7 +1,7 @@
 # 📘 BÀN GIAO DỰ ÁN — Trợ Lý Giáo Viên Ngữ Văn THCS
 
 > **Dành cho session mới:** File này tóm tắt toàn bộ trạng thái dự án. Đọc xong là có thể tiếp tục ngay, không cần hỏi lại cô Thu.
-> **Cập nhật lần cuối:** 2026-05-01 — Giai đoạn A hoàn thành (Kho Ngữ Liệu GDPT 2018 + Trắc nghiệm + Rubric)
+> **Cập nhật lần cuối:** 2026-09-03 — Bỏ hẳn hướng Zalo, chuyển hoàn toàn sang "Lớp Học Kết Nối" (Firebase) + Cổng Lớp Học.
 
 ---
 
@@ -15,31 +15,25 @@
 
 ---
 
-## 🎨 Bảng màu đã chọn (Palette "Cô Thu")
+## 🎨 Bảng màu đang dùng (Palette "Kem Hồng")
 
 ```css
---c-primary: #0f766e       /* Teal đậm */
---c-primary-soft: #14b8a6  /* Teal nhẹ */
---c-accent: #be185d        /* Rose đậm */
---c-accent-soft: #ec4899   /* Rose nhẹ */
---c-gold: #d97706          /* Gold ấm */
---c-cream: #fdfaf6         /* Kem trắng */
---c-cream-deep: #f5ede1    /* Kem đậm */
---c-ink: #3c2a21           /* Nâu đất ấm */
---c-border: #e7dcd0
+--c-primary: #be185d;      /* Hồng đậm - chủ đạo */
+--c-primary-soft: #ec4899; /* Hồng tươi */
+--c-accent: #e11d48;       /* Hồng-đỏ - nhấn AI/chấm */
+--c-accent-soft: #fb7185;  /* Đào/coral */
+--c-gold: #d97706;         /* Vàng kem ấm */
+--c-cream: #fff7f4;        /* Kem hồng nhạt */
+--c-cream-deep: #fdeae2;   /* Kem đậm */
+--c-ink: #4a2530;          /* Nâu mận ấm */
+--c-ink-soft: #6a4552;     /* dùng biến này cho chữ mờ/phụ, KHÔNG hardcode hex */
+--c-border: #f0dcd0;
+--app-fs: 17px;            /* cỡ chữ do cô tự chỉnh qua nút "Aa" trên header */
 ```
 
-**Font:** Be Vietnam Pro (body) + Playfair Display (heading decorative)
+❌ Không dùng: `indigo-*`, `violet-*`, `purple-*`, `fuchsia-*`
 
-**Quy tắc mapping Tailwind:**
-- `bg-teal-700` cho nút chính, `bg-rose-700` cho nút AI/chấm bài
-- `bg-teal-50` + `text-teal-700` cho tag/pill
-- `bg-rose-50` + `text-rose-700` cho AI tag/pill
-- Gradient: `from-rose-* to-amber-*` (ấm), `from-teal-* to-cyan-*` (lạnh)
-- ❌ Không dùng: `indigo-*`, `violet-*`, `purple-*`, `fuchsia-*` (đã purge hết)
-
-**CSS utility classes đã tạo trong `<style>`:**
-`.soft-card` `.cream-card` `.teal-card` `.rose-card` `.btn-primary` `.btn-accent` `.btn-gold` `.tab-chip` `.flourish-underline` `.glass-header` `.pill` `.gradient-bg`
+Chế độ "chữ đậm hơn" (bật qua nút Aa) toggle class `text-strong` trên `<html>`, tự làm đậm heading + làm đậm màu chữ mờ.
 
 ---
 
@@ -47,127 +41,77 @@
 
 | File | Mô tả | Trạng thái |
 |------|-------|-----------|
-| `TroLyGiaoVien_Phase4_REFACTORED.html` ⭐ | **REFACTORED (đang dùng):** Gộp Grading vào Classes + Zalo tích hợp đầy đủ | ✅ Sản xuất |
-| `TroLyGiaoVien_Phase4_Groq_v2_UPDATED.html` | Bản gốc Phase 4 (trước refactor) | 🗂️ Lưu trữ |
-| `ZALO_INTEGRATION_GUIDE.md` | Hướng dẫn chi tiết 5 bước sử dụng Zalo (tiếng Việt) | 📖 Hướng dẫn |
-| `deploy/index.html` | Copy của Phase 4 REFACTORED (sẵn deploy Netlify) | 🚀 Deploy |
-| `TroLyGiaoVien_Phase1.html` | Phase 1: Soạn giáo án + Kế hoạch bài dạy | 🗂️ Lưu trữ |
-| `TroLyGiaoVien_Phase2.html` | Phase 2: + Soạn đề + Ngân hàng câu hỏi | 🗂️ Lưu trữ |
-| `TroLyGiaoVien_Phase3.html` | Phase 3: + Chấm bài AI + Portfolio HS | 🗂️ Lưu trữ |
+| `TroLyGiaoVien_Phase4_REFACTORED.html` ⭐ | Chương trình chính cho GIÁO VIÊN — nguồn duy nhất, Netlify build tự copy thành `dist/index.html` | ✅ Sản xuất |
+| `CongHocSinh.html` ⭐ | **Cổng Lớp Học** — cho HỌC SINH/PHỤ HUYNH, deploy ở đường dẫn `/cong` | ✅ Sản xuất |
+| `trolygv_server.py` | Máy chủ nội bộ (chạy `python3 trolygv_server.py`, cổng 8765) — lưu dữ liệu ra file thật + proxy gọi Claude API (tránh CORS) khi mở app dạng file cục bộ | 🖥️ Tuỳ chọn, chạy trên máy cô |
+| `netlify.toml` | Cấu hình build Netlify — copy 2 file HTML trên thành `dist/index.html` + `dist/cong.html`, định tuyến `/cong`, `/api/claude/message` | ⚙️ Build |
+| `docs/index.html`, `docs/cong/index.html` | Bản sao dự phòng, host trên **GitHub Pages** (miễn phí, không giới hạn credit như Netlify) — **PHẢI đồng bộ tay** mỗi lần sửa file chính (xem Quy tắc #8) | 🚀 Deploy dự phòng |
+
+Các file `TroLyGiaoVien_Phase1/2/3.html`, `TroLyGiaoVien_Phase4_Groq_v2_UPDATED.html`, `deploy/` là bản cũ/lưu trữ, không dùng để deploy.
+
+**⭐ Bỏ hẳn (2026-09-03):** Toàn bộ hướng tích hợp Zalo — `zalo_reader.py`, `ZALO_INTEGRATION_GUIDE.md`, `HUONG_DAN_BO_DOC_ZALO.md`, `BAN_GIAO_ZALO.md`, `zalo_reader_config.example.json` đã **xoá khỏi repo**. Trong code chính: xoá hẳn tab "Sổ điểm · Zalo" (`ClassesTab` và mọi component con: `ZaloMainView/ZaloSettingsView/ZaloMonitorView/ZaloCollectorView/ZaloRemindView/ZaloHistoryView`, `GradingTabView` và cây con chấm bài rule-based cũ `chamBaiTuDong`, OCR qua `localhost:3000` đã hỏng). Tab "Tin nhắn" cũ tên `ZaloChatTab` đã đổi tên thành **`ClassMessagesTab`** (bản chất là nhắn tin qua Firebase thời gian thực, không liên quan Zalo, giữ lại và đổi route từ `zalo-chat` → `class-messages`). **Toàn bộ quản lý lớp giờ chỉ còn 1 hệ thống duy nhất: "Lớp Học Kết Nối" (`OnlineClassTab`, các component `Oc*`), dùng Firebase.**
 
 ---
 
 ## 🧱 Kiến trúc kỹ thuật
 
-**Stack:** 1 file HTML độc lập (không cần build)
-- React 18 + Babel standalone (JSX in-browser)
+**Stack:** 1 file HTML độc lập mỗi chương trình (không cần build/npm)
+- React 18 + Babel standalone (JSX chạy thẳng trong trình duyệt) qua CDN
 - Tailwind CSS qua CDN
-- Tesseract.js (OCR chữ tay tiếng Việt)
-- html2pdf.js (export PDF)
-- LocalStorage (persistence, key: `tro_ly_gv_nguvan_thcs_v3`)
-- Export Word: Blob + HTML trick
-- Export Excel: SheetJS không dùng — dùng CSV tải xuống
+- **Firebase** (Auth + Firestore) — nguồn dữ liệu CHÍNH cho "Lớp Học Kết Nối" + Cổng Lớp Học; LocalStorage chỉ là cache/dự phòng cho phần soạn bài/ra đề (không đăng nhập vẫn dùng được, nhưng không đồng bộ đa thiết bị)
+- Claude API (chất lượng cao, đọc được ảnh — bắt buộc cho chấm bài chụp tay) / Groq API (nhanh, miễn phí, gọi thẳng từ trình duyệt) / Ollama (local, offline) — chọn trong "Cài đặt AI"
+- Export Word: Blob + HTML trick; Export PDF: html2pdf.js/jsPDF; ⚠️ nút "PowerPoint" ở LessonModal **thực ra xuất PDF**, chưa phải .pptx thật (biết là bug, chưa sửa)
 
-**Trạng thái code hiện tại (Phase 4.3 — Giai đoạn A):**
-- **6,642 dòng** (+663 so với Phase 4.2), ✅ Babel parse OK
-- Version: 4.3 · Kho Ngữ Liệu GDPT 2018 + Trắc nghiệm + Rubric 🌸
+**Quy trình đưa lên mạng (đầy đủ):**
+1. Sửa code → parse thử bằng **Babel THẬT** (xem lệnh mẫu ở Quy tắc #4, không chỉ đếm ngoặc) → chỉ push khi "BABEL PARSE OK"
+2. `cp TroLyGiaoVien_Phase4_REFACTORED.html docs/index.html` + `cp CongHocSinh.html docs/cong/index.html` (đồng bộ GitHub Pages)
+3. `git add` + `git commit` + `git push origin main`
+4. Netlify tự build từ `main` (qua `netlify.toml`) → `trolygiaovien.netlify.app`. GitHub Pages tự build từ thư mục `docs/` trên `main` → `thinhdv123456.github.io/tro-ly-giao-vien/` (dự phòng khi Netlify hết credit build hàng tháng — đã từng xảy ra)
+5. **Firebase yêu cầu domain phải nằm trong "Authorized domains"** (Firebase Console → Authentication → Settings) mới hoạt động được — Netlify domain đã được cấp, **GitHub Pages domain (`thinhdv123456.github.io`) phải tự thêm tay 1 lần** nếu chưa có, nếu không Firestore sẽ báo lỗi 400 âm thầm (đã từng xảy ra + đã hướng dẫn cô Thu thêm).
 
-**Các component lớn:**
-- `Dashboard` — cream-card hero + 6 stat cards gradient + quick-start
-- `PlanningTab` — soạn kế hoạch bài dạy
-- `LessonTab` — soạn giáo án + export PPTX (jsPDF)
-- **`ExamTab`** — 5 sub-tabs (MỚI: thêm tab Kho Ngữ Liệu):
-  - **Đề kiểm tra** (`ExamModal`) — ma trận × Bloom, ngữ liệu từ kho, trắc nghiệm, rubric
-  - **🤖 Ra Đề Tự Động** (`AutoGenExamView`) — lọc theo loại VB + chủ đề, prompt GDPT 2018
-  - **📚 Kho Ngữ Liệu** (`KhoNguLieuTab`) — CRUD + duyệt + dán văn bản nhanh ⭐ MỚI
-  - **Ma trận đề** (`MatrixModal`)
-  - **Ngân hàng câu hỏi** (`QuestionBankModal`) — hỗ trợ tự luận + trắc nghiệm A/B/C/D ⭐ MỚI
-- **`ClassesTab`** — 4 sub-tabs: classes | grading | zalo-main | report
-- `ZaloSettingsView / ZaloMonitorView / ZaloCollectorView / ZaloRemindView / ZaloHistoryView`
+**Các menu/tab chính (MENU_ITEMS trong code):**
+- `online` (ghim đầu menu) → **`OnlineClassTab`** = "Lớp Học Kết Nối" — quản lý lớp/giao bài/chấm bài/báo cáo, DUY NHẤT còn lại, dùng Firebase. Các component: `OcNewClass, OcClassDetail, OcNewAsg, OcSubmissions, OcGrade, OcMessages`...
+- `dashboard` → `Dashboard` (trang chủ, hero + widget "Lớp Học Kết Nối" rút gọn)
+- `planning` → `PlanningTab` (kế hoạch bài dạy), `lesson` → `LessonTab` (giáo án)
+- `exam` → `ExamTab`, 5 sub-tab: **Đề kiểm tra** (`ExamModal`) · **🤖 Ra Đề Tự Động** (`AutoGenExamView`) · **📚 Kho Ngữ Liệu** (`KhoNguLieuTab`) · **Ma trận đề** (`MatrixModal`) · **Ngân hàng câu hỏi** (`QuestionBankModal`)
+- `library` → `LibraryTab` (thư viện tài liệu tham khảo)
+- `settings` → `SettingsTab` (Cài đặt AI, xuất/nhập dữ liệu, đăng nhập đám mây)
+- Route riêng (không trong MENU_ITEMS, mở qua icon "Tin nhắn"): `class-messages` → `ClassMessagesTab`
 
-**Hằng số quan trọng (MỚI thêm):**
-```js
-const LOAI_VAN_BAN = [
-  { id: 'van_hoc', ten: 'Văn học', icon: '📖' },       // truyện, thơ, ký, kịch
-  { id: 'thong_tin', ten: 'Thông tin', icon: '📰' },    // báo chí, hướng dẫn
-  { id: 'nghi_luan', ten: 'Nghị luận', icon: '💬' },   // nghị luận xã hội/văn học
-  { id: 'hanh_chinh', ten: 'Hành chính-Công vụ', icon: '📋' }, // đơn, thông báo
-];
-```
+**Ra đề bằng AI — đã hợp nhất cách xử lý lỗi (2026-09-03):** 3 nơi AI sinh đề (`generateFullExamAI`, `generateQuestionsFromPassageAI` trong `ExamModal`; `AutoGenExamView.generateExam`; lệnh `/sinh-đề` trong Trợ Lý AI) đều dùng chung `parseAIExamJson()`/`parseAINestedObject()` (gần `callGroqAPI`) — nếu AI trả JSON lỗi định dạng, KHÔNG được đổ JSON thô ra đề, phải báo lỗi rõ ràng cho cô. **Nếu thêm nơi mới sinh đề bằng AI, PHẢI dùng lại 2 hàm này**, đừng viết `JSON.parse` riêng. Cũng có bộ chọn "Loại câu hỏi Đọc hiểu" (`QUESTION_TYPE_OPTIONS`, `buildQuestionTypeInstruction`) — Kết hợp/Toàn trắc nghiệm/Toàn tự luận, hiện trước nút tạo đề.
 
-**PASSAGES_BANK v2** (20 ngữ liệu, metadata đầy đủ):
-- Mỗi item: `{ id, title, author, source, class, genre, subgenre, theme, difficulty, copyright_status, approved, wordCount, excerpt, fullText }`
-- ID format: `VH_6_001` (Văn học lớp 6), `TT_7_001` (Thông tin lớp 7), `NL_8_001` (Nghị luận lớp 8), `HC_6_001` (Hành chính lớp 6)
-- copyright_status: `'public_domain'` | `'nha_nuoc'` | `'education_use'` | `'unknown'`
+**Bảo vệ dữ liệu đa tài khoản (2026-09-03):** localStorage lưu theo TRÌNH DUYỆT, không theo tài khoản Firebase — nếu không cẩn thận, dữ liệu tài khoản A có thể bị đẩy nhầm lên tài khoản B khi B đăng nhập lần đầu trên cùng máy. Đã chặn bằng `LAST_CLOUD_UID_KEY` trong `App`'s `onAuthStateChanged` — chỉ đẩy dữ liệu local lên cloud nếu UID khớp lần đăng nhập trước trên chính máy đó.
 
-**Data model (`data`) — đã bổ sung `passages`:**
-```js
-{
-  plans: [], lessons: [], exams: [], questionBank: [],
-  gradings: [{id,title,grade,type,score,maxScore,feedback,annotations,...}],
-  classes: [{id,name,grade,students:[{id,name,parentPhone,parentName,zaloName,note}]}],
-  assignments: [], submissions: [],
-  // ⭐ MỚI - Kho ngữ liệu do cô tự thêm (kho tĩnh PASSAGES_BANK không lưu ở đây)
-  passages: [{
-    id: 'USR_xxx', title, author, source, class, genre, subgenre, theme,
-    difficulty, copyright_status, approved: true/false,
-    wordCount, excerpt, fullText, addedAt
-  }],
-  zaloConfig: { phone, groups, apiKey, updatedAt },
-  zaloSubmissions: [{ id, studentName, assignmentTitle, content, timestamp, status }]
-}
-```
-
-**ExamModal — tính năng mới:**
-- `passageGenre` field — lọc ngữ liệu theo loại VB
-- `passageAuthor` field — hiển thị tác giả trong đề
-- `rubric: [{cauSo, tienChi:[{y, diem, goi_y}]}]` — barem có cấu trúc cho phần Viết
-- Preview 3 chế độ: Đề | Đáp án | **Rubric** (mới)
-- Dropdown "Chọn từ kho ngữ liệu" lấy từ `[...PASSAGES_BANK, ...data.passages]`
-
-**QuestionBankModal — tính năng mới:**
-- `type: 'essay' | 'mc'` — chọn loại câu hỏi
-- `options: ['','','','']` — 4 lựa chọn A/B/C/D
-- `correctAnswer: 'A'|'B'|'C'|'D'` — đáp án đúng
-
-**Key helpers:**
-- `slugifyVN(str)` — NFD normalize + strip diacritics
-- `chamBaiTuDong(text, config)` — engine chấm AI rule-based
-- `buildAssignmentZaloMessage / buildReminderZaloMessage / buildFeedbackZaloMessage`
-- Copy-paste workflow: `navigator.clipboard.writeText(msg)` + `window.open('https://chat.zalo.me/')`
+**Cổng Lớp Học (`CongHocSinh.html`) — cấu trúc học sinh (2026-09-03, viết lại):**
+- `StudentHome` — **5 tab**: Chat | Tài liệu (mới, collection Firestore `materials`) | **Bài tập** (trung tâm, nút tròn nổi) | Thi & Kiểm tra (bài tập có `kind:'kiemtra'`, chọn lúc giao bài) | Kết quả
+- `DoAssignment` — bắt buộc chọn 1 trong 2 cách làm bài TRƯỚC khi bắt đầu: **Làm trực tiếp** (mỗi câu 1 ô + đếm từ) hoặc **Nộp bằng ảnh chụp** (mở thẳng camera, tối đa 10 ảnh, tự kiểm tra độ nét bằng phương sai Laplacian — `isImageBlurry()` — cảnh báo nếu mờ nhưng vẫn cho dùng nếu HS xác nhận)
+- ⚠️ Biết nhưng CHƯA sửa (xem báo cáo kiểm tra toàn diện đã gửi cô Thu 2026-09-03): chưa có nút thoát màn làm bài mà không nộp; chưa đổi lại được cách làm bài (type/photo) sau khi đã chọn.
 
 ---
 
-## ✅ Đã hoàn thành
+## ✅ Đã hoàn thành (tóm tắt, xem lịch sử git để biết chi tiết)
 
-- [x] **Phase 1:** Soạn giáo án + kế hoạch bài dạy
-- [x] **Phase 2:** Soạn đề + ngân hàng câu hỏi + tự động sinh đề
-- [x] **Phase 3:** Chấm bài AI + OCR + sổ theo dõi HS + báo cáo lớp + phiếu phụ huynh
-- [x] **Phase 4:** Quản lý lớp + giao/nộp/chấm/trả bài qua Zalo + đồng bộ ảnh→HS
-- [x] **Phase 4 Refactored:** Gộp Grading vào Classes + Zalo integration đầy đủ
-- [x] **Zalo Integration (Phase 4.2):** Settings / Monitor / Collector / Remind / History
-- [x] **UI redesign:** bảng màu cô Thu (teal + rose + cream), font Be Vietnam Pro + Playfair
-- [x] **Documentation:** Hướng dẫn sử dụng Zalo chi tiết (tiếng Việt)
-- [x] **⭐ Giai đoạn A — GDPT 2018 (2026-05-01):**
-  - [x] `LOAI_VAN_BAN` — 4 loại văn bản (Văn học, Thông tin, Nghị luận, Hành chính)
-  - [x] `PASSAGES_BANK v2` — 20 ngữ liệu, metadata đầy đủ (genre, copyright, wordCount...)
-  - [x] `THEMES` mở rộng 15 chủ đề phủ 4 loại văn bản
-  - [x] `KhoNguLieuTab` — CRUD ngữ liệu, duyệt pending/approved, dán văn bản 2 bước
-  - [x] `PassageModal` + `PastePassageModal` — thêm/sửa ngữ liệu với metadata
-  - [x] `QuestionBankModal` — hỗ trợ tự luận + trắc nghiệm A/B/C/D
-  - [x] `ExamModal` — chọn loại văn bản, chọn từ kho, trắc nghiệm, rubric cấu trúc
-  - [x] `AutoGenExamView` — lọc theo loại VB + chủ đề, prompt AI chuẩn GDPT 2018
+- Soạn giáo án + kế hoạch bài dạy, ra đề (ma trận Bloom, kho ngữ liệu GDPT 2018, trắc nghiệm + tự luận, rubric)
+- Chấm bài AI (kể cả ảnh chụp tay qua Claude Vision)
+- **Lớp Học Kết Nối** (Firebase): tạo lớp, giao bài, nộp/chấm/trả bài, nhắn tin thời gian thực, báo cáo
+- **Cổng Lớp Học**: 5 tab, 2 cách làm bài, PWA cài được trên điện thoại
+- Cài đặt AI đa nguồn (Claude/Groq/Ollama), model mặc định `claude-sonnet-5`
+- Nút "Aa" chỉnh cỡ chữ (14-24px) + chế độ chữ đậm hơn
+- Trợ Lý AI trong app hiểu được toàn bộ chương trình (`APP_HELP_CONTEXT`, tự lấy menu từ code)
+- Host dự phòng GitHub Pages (`docs/`) song song Netlify
+- **2026-09-03: Bỏ hẳn Zalo**, dọn ~3000 dòng code hệ thống quản lý lớp cũ không dùng
 
 ---
 
-## 🚀 Các hướng mở rộng tiếp (Phase 5+ gợi ý)
+## 🚀 Việc còn tồn đọng / hướng mở rộng tiếp
 
-1. **Backend Firebase/Supabase** — đồng bộ dữ liệu đa thiết bị (hiện LocalStorage chỉ 1 máy)
-2. **Zalo Mini App** — push thông báo thật, không cần copy-paste
-3. **AI thật (Claude API / Gemini)** — chấm bài chính xác hơn thay engine rule-based
-4. **PWA** — cài như app trên điện thoại, offline-first
-5. **Multi-teacher** — login + phân quyền nhiều giáo viên/1 trường
-6. **Thống kê nâng cao** — chart tiến bộ từng HS theo thời gian, so sánh lớp
+Xem file báo cáo kiểm tra toàn diện đã gửi cô Thu (03/09/2026, ~29 phát hiện qua mô phỏng 3 vai: giáo viên máy tính/điện thoại, học sinh Cổng điện thoại) để biết danh sách lỗi cần sửa theo thứ tự ưu tiên — trong đó có 1 lỗi RIÊNG TƯ nghiêm trọng (nút "Gửi tất cả" khi chấm hàng loạt làm lộ điểm học sinh ra cả lớp) cần sửa trước tiên.
+
+Hướng khác:
+1. **Multi-teacher / phân quyền** — nhiều giáo viên dùng chung 1 trường
+2. **Thống kê nâng cao** — biểu đồ tiến bộ HS theo thời gian, so sánh lớp
+3. **PowerPoint thật** — thay jsPDF bằng PptxGenJS cho nút "Xuất PowerPoint"
+4. Dọn tiếp code trùng lặp còn sót (không phải Zalo) nếu tìm thấy — bài học từ vụ Zalo: mỗi khi thêm tính năng, tránh viết lại từ đầu một luồng đã có sẵn ở nơi khác trong app.
 
 ---
 
@@ -176,31 +120,16 @@ const LOAI_VAN_BAN = [
 1. **Luôn tiếng Việt**, xưng "tôi - cô"
 2. **Emoji hoa cỏ/🌸** ở cuối câu để ấm áp (vừa phải, không lạm dụng)
 3. **Không dùng** màu indigo/violet/purple/fuchsia trong UI
-4. **Babel verify** sau mỗi lần sửa file lớn (dùng script kiểm tra braces/parens/brackets)
-5. **Khi tạo file mới**, lưu vào `/sessions/youthful-quirky-turing/mnt/TRO LY GIAO VIEN/` và link `computer://` để cô mở
-6. **Tránh lặp lại công việc đã làm** — đọc file hiện tại trước khi sửa
-7. **⭐ Cập nhật `APP_HELP_CONTEXT_DETAILS`** (trong `TroLyGiaoVien_Phase4_REFACTORED.html`, gần `GROQ_MODEL`) mỗi khi thêm/đổi tính năng lớn (sub-tab mới, đổi luồng dùng AI, đổi nút chính...). Đây là phần mô tả app mà "Trợ Lý AI" (chat trong app) dùng để hướng dẫn người dùng — không tự cập nhật được, phải sửa tay. Riêng danh sách menu (`APP_MENU_SUMMARY`) đã tự lấy từ `MENU_ITEMS` nên không cần sửa, chỉ cần thêm id vào `MENU_IMPLEMENTED_IDS` khi 1 tab đã code xong.
-8. **Đồng bộ `docs/`** (bản GitHub Pages dự phòng) mỗi khi push thay đổi lớn cho `TroLyGiaoVien_Phase4_REFACTORED.html` hoặc `CongHocSinh.html` — copy đè vào `docs/index.html` và `docs/cong/index.html` rồi push cùng lúc, để 2 host (Netlify chính + GitHub Pages dự phòng) luôn khớp nhau.
-
----
-
-## 🔁 Lời nhắc cho Claude session mới
-
-**Nếu cô Thu yêu cầu tiếp tục/sửa/mở rộng:**
-
-1. ⭐ **File chính:** `TroLyGiaoVien_Phase4_REFACTORED.html` (không phải Phase4.html cũ)
-2. **Hướng dẫn Zalo:** Đọc `ZALO_INTEGRATION_GUIDE.md` để hiểu quy trình copy-paste
-3. **Tôn trọng cấu trúc:**
-   - ClassesTab có 4 sub-tabs: classes | grading (GradingTabView) | zalo-main | report
-   - Zalo có 5 sub-views: settings | monitor | collector | remind | history
-   - Lưu dữ liệu vào `data.zaloConfig` + `data.zaloSubmissions`
-4. **Palette + CSS:** Teal (#0f766e), Rose (#be185d), Cream (#fdfaf6) — không đổi
-5. **Verify:** Node script kiểm tra braces/parens/brackets (phải balanced)
-6. **Deploy:** Copy sang `deploy/index.html` trước khi lên Netlify
-
-**Phase 5+ (API Zalo thực):**
-- Kết nối Zalo API → tự động nhận/gửi tin (không copy-paste)
-- Dùng file này làm base, thêm API handlers vào ZaloSettingsView
-- Test kỹ trước deploy (API key sensitive)
+4. **Verify bằng Babel THẬT** sau mỗi lần sửa file lớn — KHÔNG chỉ đếm ngoặc (dễ báo nhầm vì string/emoji chứa ký tự ngoặc). Lệnh mẫu (cần `@babel/standalone` cài sẵn cục bộ, ví dụ trong thư mục scratchpad):
+   ```js
+   const Babel = require('<path>/node_modules/@babel/standalone/babel.min.js');
+   const script = fs.readFileSync('TroLyGiaoVien_Phase4_REFACTORED.html','utf8').split('<script type="text/babel">')[1].split('</script>')[0];
+   Babel.transform(script, { presets: ['react'] }); // throw nếu lỗi cú pháp thật
+   ```
+5. **Tránh lặp lại công việc đã làm** — đọc file hiện tại trước khi sửa. Cảnh giác với việc code có 2 nơi làm cùng 1 việc (nguồn gốc phần lớn lỗi từng tìm thấy, ví dụ vụ Zalo vs Lớp Học Kết Nối).
+6. **⭐ Cập nhật `APP_HELP_CONTEXT_DETAILS`** (trong `TroLyGiaoVien_Phase4_REFACTORED.html`, gần `GROQ_MODEL`) mỗi khi thêm/đổi tính năng lớn. Danh sách menu (`APP_MENU_SUMMARY`) đã tự lấy từ `MENU_ITEMS` nên không cần sửa tay, chỉ thêm id vào `MENU_IMPLEMENTED_IDS` khi 1 tab code xong.
+7. **Đồng bộ `docs/`** (GitHub Pages dự phòng) mỗi khi push thay đổi lớn cho `TroLyGiaoVien_Phase4_REFACTORED.html` hoặc `CongHocSinh.html` — copy đè `docs/index.html` + `docs/cong/index.html`, push cùng lúc.
+8. **Hạn chế push nhiều lần liên tiếp cho sửa nhỏ** — mỗi push khiến Netlify tự build tốn credit/tháng (đã từng hết credit giữa tháng). Gom nhiều sửa nhỏ, test kỹ, rồi push 1 lần.
+9. **Không cần hỏi lại** việc đã quyết định rõ trong file này (ví dụ: đã bỏ Zalo hẳn, không hỏi lại có nên quay lại Zalo không).
 
 Chúc cô Thu dạy tốt! 🌸

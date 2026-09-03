@@ -23,31 +23,9 @@ DATA_DIR = os.path.join(BASE, "DuLieu")
 DATA_FILE = os.path.join(DATA_DIR, "TroLyGiaoVien_DuLieu.json")
 BAK_FILE = os.path.join(DATA_DIR, "TroLyGiaoVien_DuLieu.bak.json")
 SNAP_DIR = os.path.join(DATA_DIR, "SaoLuu_TheoNgay")
-# Hộp thư đến từ Zalo: bộ đọc Zalo (zalo_reader.py) đẩy bài HS vào đây,
-# app đọc ra rồi đưa vào thư viện chấm bài.
-INBOX_FILE = os.path.join(DATA_DIR, "ZaloInbox.json")
-IMG_DIR = os.path.join(DATA_DIR, "ZaloAnh")
 
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(SNAP_DIR, exist_ok=True)
-os.makedirs(IMG_DIR, exist_ok=True)
-
-
-def _load_inbox():
-    if os.path.exists(INBOX_FILE):
-        try:
-            with open(INBOX_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return []
-    return []
-
-
-def _save_inbox(items):
-    tmp = INBOX_FILE + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(items, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, INBOX_FILE)
 
 
 def _call_claude(prompt, max_tokens, api_key, model):
@@ -115,10 +93,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 except Exception as e:
                     return self._send_json(200, {"ok": True, "data": None, "error": str(e)})
             return self._send_json(200, {"ok": True, "data": None})
-        # App gọi vào đây để lấy các bài Zalo đang chờ đưa vào chấm bài
-        if self.path == "/api/zalo/inbox":
-            items = _load_inbox()
-            return self._send_json(200, {"ok": True, "count": len(items), "items": items})
         return super().do_GET()
 
     def do_POST(self):
@@ -179,31 +153,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self._send_json(200, {"text": text})
             except Exception as e:
                 return self._send_json(500, {"error": str(e)})
-
-        # 📥 Bộ đọc Zalo đẩy bài HS vào hộp thư đến
-        if self.path == "/api/zalo":
-            try:
-                length = int(self.headers.get("Content-Length", 0))
-                item = json.loads(self.rfile.read(length).decode("utf-8"))
-                items = _load_inbox()
-                # Chống trùng: bỏ qua nếu đã có cùng id
-                new_id = item.get("id")
-                if new_id and any(x.get("id") == new_id for x in items):
-                    return self._send_json(200, {"ok": True, "duplicate": True, "count": len(items)})
-                item.setdefault("receivedAt", datetime.datetime.now().isoformat())
-                items.append(item)
-                _save_inbox(items)
-                return self._send_json(200, {"ok": True, "count": len(items)})
-            except Exception as e:
-                return self._send_json(500, {"ok": False, "error": str(e)})
-
-        # 🧹 App báo đã nhập xong -> xoá hộp thư đến
-        if self.path == "/api/zalo/clear":
-            try:
-                _save_inbox([])
-                return self._send_json(200, {"ok": True})
-            except Exception as e:
-                return self._send_json(500, {"ok": False, "error": str(e)})
 
         return self._send_json(404, {"ok": False, "error": "not found"})
 
