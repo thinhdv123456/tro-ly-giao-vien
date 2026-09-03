@@ -10305,9 +10305,20 @@ const OcClassCard = ({ cls, onOpen }) => {
 };
 const OcNewClass = ({ fbUser, onClose }) => {
   const [name,setName]=useState(''); const [grade,setGrade]=useState(6); const [busy,setBusy]=useState(false);
-  const create = async () => { if(!name.trim())return; setBusy(true); const code=ocGenCode();
-    await fbDb.collection('classes').doc(code).set({ teacherUid:fbUser.uid, teacherName:fbUser.email, name:name.trim(), grade:Number(grade), students:[], createdAt:Date.now() });
-    setBusy(false); onClose(); };
+  const create = async () => {
+    if(!name.trim()){ alert('Nhập tên lớp trước đã cô ơi (VD: 6A).'); return; }
+    if(!fbUser){ alert('Chưa đăng nhập tài khoản đám mây nên không tạo lớp được. Cô vào ⚙️ Cài đặt AI → Đăng nhập đám mây trước nhé.'); return; }
+    setBusy(true);
+    const code=ocGenCode();
+    try {
+      await fbDb.collection('classes').doc(code).set({ teacherUid:fbUser.uid, teacherName:fbUser.email, name:name.trim(), grade:Number(grade), students:[], createdAt:Date.now() });
+      onClose();
+    } catch (e) {
+      const code2 = e && e.code, msg = e && e.message ? e.message : String(e);
+      alert('❌ Không tạo được lớp: ' + msg + (code2 ? ' (' + code2 + ')' : '') + '\n\n💡 Thường do Quy tắc bảo mật (Security Rules) trên Firebase Console chưa cho phép ghi vào collection "classes". Cô chụp lỗi này gửi lại để kiểm tra giúp.');
+    }
+    setBusy(false);
+  };
   return <OcModal title="Tạo lớp mới" onClose={onClose}>
     <label className="block text-sm font-medium mb-1">Tên lớp</label>
     <input value={name} onChange={e=>setName(e.target.value)} placeholder="VD: 6A, 7B..." className="w-full px-3 py-2.5 border rounded-xl mb-3" />
