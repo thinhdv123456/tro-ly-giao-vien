@@ -855,6 +855,7 @@ const MENU_GROUPS = ['Tổng quan', 'Soạn giảng', 'Đánh giá & kiểm tra'
 
 // ============== HELPER ==============
 const STORAGE_KEY = 'tro_ly_gv_nguvan_thcs_v3';
+const LAST_CLOUD_UID_KEY = 'tro_ly_gv_last_cloud_uid'; // 🛟 tránh lẫn dữ liệu máy cũ sang tài khoản đám mây khác
 const APP_VERSION = '4.1';
 const loadData = () => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch { return {}; } };
 
@@ -10494,9 +10495,19 @@ const App = () => {
           if (remote && remote.items && Object.keys(remote.items).length > 0) {
             applyRestoredPayload(remote); // đám mây có dữ liệu -> dùng bản đám mây
           } else {
-            // đám mây trống -> đẩy dữ liệu hiện có trên máy này lên đám mây
-            fbWriteDataNow(user.uid, { items: saved.items || {}, selectedClass: saved.selectedClass || 6, selectedBook: saved.selectedBook || 'ketnoi', teacherName: saved.teacherName || '', schoolName: saved.schoolName || '' });
+            // ☁️ trống. Dữ liệu "saved" đang có trong máy này có THẬT SỰ thuộc tài khoản đang
+            // đăng nhập không? So với UID đã lưu lần đăng nhập gần nhất trên chính máy này.
+            const lastUid = localStorage.getItem(LAST_CLOUD_UID_KEY);
+            if (lastUid === user.uid) {
+              // Đúng là dữ liệu của tài khoản này (vd: lần đầu chuyển từ máy cũ sang đám mây) -> đẩy lên.
+              fbWriteDataNow(user.uid, { items: saved.items || {}, selectedClass: saved.selectedClass || 6, selectedBook: saved.selectedBook || 'ketnoi', teacherName: saved.teacherName || '', schoolName: saved.schoolName || '' });
+            } else {
+              // 🛟 Dữ liệu trên máy thuộc tài khoản KHÁC (hoặc chưa từng đăng nhập đám mây trên máy này)
+              // -> KHÔNG đẩy lên, tránh làm bẩn tài khoản mới. Bắt đầu sạch cho tài khoản này.
+              applyRestoredPayload({ items: {}, selectedClass: 6, selectedBook: 'ketnoi', teacherName: '', schoolName: '' });
+            }
           }
+          localStorage.setItem(LAST_CLOUD_UID_KEY, user.uid);
         }
       });
     } else {
