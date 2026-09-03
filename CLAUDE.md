@@ -1,7 +1,7 @@
 # 📘 BÀN GIAO DỰ ÁN — Trợ Lý Giáo Viên Ngữ Văn THCS
 
 > **Dành cho session mới:** File này tóm tắt toàn bộ trạng thái dự án. Đọc xong là có thể tiếp tục ngay, không cần hỏi lại cô Thu.
-> **Cập nhật lần cuối:** 2026-09-03 — Bỏ hẳn hướng Zalo, chuyển hoàn toàn sang "Lớp Học Kết Nối" (Firebase) + Cổng Lớp Học.
+> **Cập nhật lần cuối:** 2026-09-03 — Bỏ hẳn hướng Zalo, chuyển hoàn toàn sang "Lớp Học Kết Nối" (Firebase) + Cổng Lớp Học. Đã sửa xong cả 3 đợt lỗi từ báo cáo kiểm tra toàn diện (29 phát hiện).
 
 ---
 
@@ -100,17 +100,22 @@ Các file `TroLyGiaoVien_Phase1/2/3.html`, `TroLyGiaoVien_Phase4_Groq_v2_UPDATED
 - Trợ Lý AI trong app hiểu được toàn bộ chương trình (`APP_HELP_CONTEXT`, tự lấy menu từ code)
 - Host dự phòng GitHub Pages (`docs/`) song song Netlify
 - **2026-09-03: Bỏ hẳn Zalo**, dọn ~3000 dòng code hệ thống quản lý lớp cũ không dùng
+- **2026-09-03: Đã sửa xong cả 3 đợt** từ báo cáo kiểm tra toàn diện (29 phát hiện qua mô phỏng 3 vai: giáo viên máy tính/điện thoại, học sinh Cổng điện thoại) — gồm lỗi RIÊNG TƯ nghiêm trọng (nút "Gửi tất cả" từng làm lộ điểm học sinh ra cả lớp, đã sửa thành gửi riêng), các lỗi hiển thị điện thoại (bảng tràn màn hình, modal bị bàn phím che nút Lưu), và các lỗi nhỏ (thiếu xác nhận trước khi xóa/ghi đè, đồng hồ đếm giờ chạy trước khi học sinh chọn cách làm bài, nút "PowerPoint" ghi sai vì thực chất xuất PDF...)
 
 ---
 
 ## 🚀 Việc còn tồn đọng / hướng mở rộng tiếp
 
-Xem file báo cáo kiểm tra toàn diện đã gửi cô Thu (03/09/2026, ~29 phát hiện qua mô phỏng 3 vai: giáo viên máy tính/điện thoại, học sinh Cổng điện thoại) để biết danh sách lỗi cần sửa theo thứ tự ưu tiên — trong đó có 1 lỗi RIÊNG TƯ nghiêm trọng (nút "Gửi tất cả" khi chấm hàng loạt làm lộ điểm học sinh ra cả lớp) cần sửa trước tiên.
+Chủ động **bỏ qua, không sửa** 2 mục sau từ báo cáo cũ — rủi ro sửa sai cao hơn lợi ích, cần cô Thu tự trải nghiệm trên điện thoại thật rồi quyết định phạm vi cụ thể trước khi làm:
+- Đóng modal (nút X) không cảnh báo mất nội dung chưa lưu — lặp lại ở *hầu hết* modal soạn thảo trong app, sửa đúng sẽ phải chạm rất nhiều nơi.
+- Vài nút bấm nhỏ hơn khuyến nghị cho ngón tay chạm (<40px) — cần nhìn trên điện thoại thật mới biết chỗ nào thực sự đáng sửa.
+
+Học sinh phải bấm "Vào lớp" mỗi lần mở app (không tự đăng nhập lại) là **chủ đích**, không phải lỗi — code có ghi chú rõ: tránh tự vào nhầm lớp/nhầm tên khi nhiều anh chị em dùng chung 1 điện thoại. Mã lớp + tên đã tự điền sẵn từ lần trước, chỉ cần bấm xác nhận 1 lần.
 
 Hướng khác:
 1. **Multi-teacher / phân quyền** — nhiều giáo viên dùng chung 1 trường
 2. **Thống kê nâng cao** — biểu đồ tiến bộ HS theo thời gian, so sánh lớp
-3. **PowerPoint thật** — thay jsPDF bằng PptxGenJS cho nút "Xuất PowerPoint"
+3. **PowerPoint thật** — nút "Outline PowerPoint" hiện xuất file PDF trình bày dạng slide (đã sửa nhãn cho đúng thực tế, KHÔNG còn ghi nhầm "PowerPoint"); nếu sau này cô Thu cần đúng file .pptx thật, phải cài lại `pptxgenjs` (đã gỡ vì trước đó có tải mà không dùng) và viết code build slide bằng thư viện đó thay vì jsPDF.
 4. Dọn tiếp code trùng lặp còn sót (không phải Zalo) nếu tìm thấy — bài học từ vụ Zalo: mỗi khi thêm tính năng, tránh viết lại từ đầu một luồng đã có sẵn ở nơi khác trong app.
 
 ---
