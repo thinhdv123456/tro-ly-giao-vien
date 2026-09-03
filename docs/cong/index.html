@@ -744,7 +744,9 @@ const StudentsView = ({ cls }) => (
 // ============== THÔNG BÁO / TRÒ CHUYỆN ==============
 const MessagesView = ({ cls, sender }) => {
   const [msgs, setMsgs] = useState([]); const [text, setText] = useState('');
+  const [sending, setSending] = useState(false);
   const boxRef = useRef(null);
+  const myUid = auth.currentUser && auth.currentUser.uid;
   useEffect(() => {
     const un = db.collection('classes').doc(cls.id).collection('messages').orderBy('at', 'asc').limitToLast(100).onSnapshot(s =>
       setMsgs(s.docs.map(d => ({ id: d.id, ...d.data() }))));
@@ -752,16 +754,23 @@ const MessagesView = ({ cls, sender }) => {
   }, [cls.id]);
   useEffect(() => { if (boxRef.current) boxRef.current.scrollTop = boxRef.current.scrollHeight; }, [msgs]);
   const send = async () => {
-    if (!text.trim()) return;
-    await db.collection('classes').doc(cls.id).collection('messages').add({ fromRole: sender.role, fromName: sender.name, text: text.trim(), at: Date.now() });
-    setText('');
+    const t = text.trim();
+    if (!t || sending) return;
+    setSending(true);
+    try {
+      await db.collection('classes').doc(cls.id).collection('messages').add({ fromRole: sender.role, fromName: sender.name, fromUid: myUid || null, text: t, at: Date.now() });
+      setText('');
+    } catch (e) {
+      alert('❌ Gửi tin nhắn không thành công (kiểm tra lại mạng): ' + (e && e.message ? e.message : e));
+    }
+    setSending(false);
   };
   return (
     <div className="card p-0 overflow-hidden flex flex-col" style={{ height: '62vh' }}>
       <div ref={boxRef} className="flex-1 overflow-y-auto p-3 space-y-2 bg-slate-50">
         {msgs.length === 0 && <p className="text-center text-slate-400 text-sm py-8">Chưa có tin nhắn. Gửi lời chào đầu tiên nhé 🌸</p>}
         {msgs.map(m => {
-          const mine = m.fromRole === sender.role && m.fromName === sender.name;
+          const mine = m.fromUid ? m.fromUid === myUid : (m.fromRole === sender.role && m.fromName === sender.name);
           return <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm ${m.fromRole === 'teacher' ? 'bg-teal-600 text-white' : mine ? 'bg-rose-500 text-white' : 'bg-white border'}`}>
               {!mine && <p className="text-[10px] opacity-70 mb-0.5">{m.fromName}</p>}
@@ -772,8 +781,8 @@ const MessagesView = ({ cls, sender }) => {
         })}
       </div>
       <div className="p-2 border-t flex gap-2 bg-white">
-        <input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} placeholder="Nhắn tin cho lớp..." className="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-        <button onClick={send} className="btn-teal px-4 rounded-xl">Gửi</button>
+        <input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} placeholder="Nhắn tin cho lớp..." disabled={sending} className="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-sm disabled:opacity-60" />
+        <button onClick={send} disabled={sending} className="btn-teal px-4 rounded-xl disabled:opacity-60">{sending ? '...' : 'Gửi'}</button>
       </div>
     </div>
   );
@@ -997,7 +1006,7 @@ const StudentHome = ({ sv, onLeave }) => {
           {done ? <Badge tone="green">Đã nộp ✓</Badge> : expired ? <Badge tone="gray">Hết hạn</Badge> : inprog ? <Badge tone="amber">Đang làm</Badge> : <Badge tone="rose">Chưa làm</Badge>}
         </div>
         {!done && !expired && <button onClick={() => setDoing(a)} className="btn-grad w-full py-3 rounded-2xl font-bold mt-4" style={{ '--a': theme.a, '--b': theme.b }}>{inprog ? '⏱ Tiếp tục làm bài' : '✍️ Bắt đầu làm bài'}</button>}
-        {done && sub.status === 'released' && <div className="mt-4 rounded-2xl p-4 text-white" style={{ background: `linear-gradient(135deg,${theme.a},${theme.b})` }}><p className="text-sm">🎉 Điểm của em: <b className="text-2xl align-middle">{sub.finalScore}</b><span className="opacity-90">/10</span></p>{sub.finalFeedback && <p className="text-xs mt-1.5 bg-white/20 rounded-xl px-3 py-2">💬 {sub.finalFeedback}</p>}</div>}
+        {done && sub.status === 'released' && <div className="mt-4 rounded-2xl p-4 text-white" style={{ background: `linear-gradient(135deg,${theme.a},${theme.b})` }}><p className="text-sm">🎉 Điểm của em: <b className="text-2xl align-middle">{sub.finalScore}</b><span className="opacity-90">/10</span></p>{sub.finalFeedback && <p className="text-xs mt-1.5 bg-white/20 rounded-xl px-3 py-2 whitespace-pre-wrap">💬 {sub.finalFeedback}</p>}</div>}
         {done && sub.status === 'submitted' && <p className="text-xs text-amber-600 mt-3 text-center font-medium bg-amber-50 rounded-xl py-2">✅ Đã nộp — chờ cô chấm 🌸</p>}
       </div>;
     })}
@@ -1036,7 +1045,7 @@ const StudentHome = ({ sv, onLeave }) => {
           {Object.values(mySubs).filter(s => s.status === 'released').length === 0 && <div className="glass rounded-3xl p-10 text-center"><div className="text-5xl mb-2">🏆</div><p className="text-slate-500 font-medium">Chưa có điểm nào được trả.</p></div>}
           {Object.values(mySubs).filter(s => s.status === 'released').map(s => {
             const a = assignments.find(x => x.id === s.assignmentId);
-            return <div key={s.id} className="glass rounded-3xl p-5 mb-3.5 shadow-lg pop"><div className="flex items-center justify-between"><p className="font-bold text-slate-800">{a ? a.title : 'Bài tập'}</p><p className="text-3xl font-extrabold" style={{ color: theme.a }}>{s.finalScore}</p></div>{s.finalFeedback && <div className="bg-slate-50 rounded-2xl p-3 mt-2.5 text-sm text-slate-700">💬 {s.finalFeedback}</div>}</div>;
+            return <div key={s.id} className="glass rounded-3xl p-5 mb-3.5 shadow-lg pop"><div className="flex items-center justify-between"><p className="font-bold text-slate-800">{a ? a.title : 'Bài tập'}</p><p className="text-3xl font-extrabold" style={{ color: theme.a }}>{s.finalScore}</p></div>{s.finalFeedback && <div className="bg-slate-50 rounded-2xl p-3 mt-2.5 text-sm text-slate-700 whitespace-pre-wrap">💬 {s.finalFeedback}</div>}</div>;
           })}
         </div>}
         {tab === 'msg' && <div className="fade-in"><MessagesView cls={sv.cls} sender={{ role: 'student', name: sv.name }} /></div>}
@@ -1160,10 +1169,18 @@ const DoAssignment = ({ sv, asg, sub, onDone }) => {
     );
   };
 
+  const handleExit = () => {
+    if (confirm('Thoát mà chưa nộp bài? Bài đang làm đã được lưu — em có thể bấm "Tiếp tục làm bài" để vào lại đúng chỗ này bất cứ lúc nào.')) onDone();
+  };
+  const handleChangeMode = () => {
+    if (confirm('Đổi cách làm bài? (Phần đã gõ/ảnh đã chụp vẫn được giữ nguyên, không mất)')) setMode(null);
+  };
   const Header = ({ subtitle }) => (
     <>
       <div className="px-5 py-3 flex items-center gap-3 sticky top-0 z-20 shadow-lg" style={{ background: `linear-gradient(135deg,${theme.a},${theme.b})` }}>
-        <div className="flex-1"><p className="font-bold hdr-title text-sm leading-tight">{asg.title}</p><p className="text-[11px] text-white/90">{subtitle}</p></div>
+        <button onClick={handleExit} title="Thoát (chưa nộp)" className="w-9 h-9 rounded-xl bg-white/20 hover:bg-white/30 text-white flex items-center justify-center shrink-0 text-lg leading-none">←</button>
+        <div className="flex-1 min-w-0"><p className="font-bold hdr-title text-sm leading-tight truncate">{asg.title}</p><p className="text-[11px] text-white/90">{subtitle}</p></div>
+        {mode && <button onClick={handleChangeMode} className="text-[11px] font-medium text-white/90 underline shrink-0 whitespace-nowrap">Đổi cách làm</button>}
       </div>
       <div className={`px-5 py-3 flex items-center justify-between sticky top-[56px] z-10 shadow ${urgent ? 'bg-red-500 text-white animate-pulse' : 'glass text-slate-700'}`}>
         <span className="text-sm font-medium">⏱ Thời gian còn lại</span>

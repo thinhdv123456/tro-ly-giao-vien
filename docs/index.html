@@ -1847,11 +1847,10 @@ const BatchGradeView = ({ cls, asg, fbUser, data, onBack }) => {
     const prompt = `Bạn là giáo viên Ngữ văn THCS. Hãy CHẤM bài làm học sinh theo đề. Trả lời tiếng Việt.\n\n=== ĐỀ ===\n${asg.body}\n\n=== BÀI LÀM ===\n${sub.answer||'(trống)'}${hasImages?'\n\n⚠️ HS nộp bằng ẢNH chụp bài viết tay đính kèm. Đọc kỹ chữ viết tay rồi chấm.':''}\nCho ĐIỂM thang 10 và NHẬN XÉT ngắn gọn, giọng động viên.\nJSON thuần: {"diem": <0-10>, "nhanxet": "..."}`;
     const r = hasImages ? await callClaudeVisionAPI(prompt, sub.images, 1400) : await callGroqAPI(prompt, 1200);
     if (r.error) return r;
-    try {
-      const t = r.text.replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/```\s*$/,'').trim();
-      const j = JSON.parse(t);
-      return { score: j.diem, feedback: j.nhanxet };
-    } catch { return { score: '', feedback: r.text }; }
+    const parsed = parseAIExamJson(r.text, ['diem', 'nhanxet']);
+    if (parsed.ok) return { score: parsed.data.diem, feedback: parsed.data.nhanxet };
+    // Không cứu được JSON -> KHÔNG đổ văn bản thô vào ô nhận xét, báo lỗi rõ để cô chấm tay bài này.
+    return { error: '⚠️ AI trả lời không đúng định dạng, cô chấm tay bài này giúp em nhé.' };
   };
 
   const aiGradeAll = async () => {
@@ -1874,21 +1873,19 @@ const BatchGradeView = ({ cls, asg, fbUser, data, onBack }) => {
   const releaseAll = async () => {
     const ready = subs.filter(s => grades[s.id]?.score !== '' && grades[s.id]?.score !== undefined && grades[s.id]?.status !== 'released');
     if (ready.length === 0) { alert('Không có bài nào cần gửi.'); return; }
-    if (!confirm(`Gửi kết quả ${ready.length} bài cho học sinh?`)) return;
+    // 🛟 CHỈ gửi riêng cho từng em (lưu vào submission, em tự xem trong "Kết quả" ở Cổng Lớp Học) —
+    // KHÔNG phát điểm/nhận xét của HS này cho HS khác đọc được. Muốn công khai kết quả 1 em cụ thể,
+    // cô vào chấm riêng bài đó và bấm "📢 Gửi cả lớp" ở màn chấm chi tiết.
+    if (!confirm(`Gửi RIÊNG kết quả ${ready.length} bài cho từng học sinh? (chỉ em đó xem được điểm/nhận xét của mình)`)) return;
     setSending(true);
     for (const sub of ready) {
       const g = grades[sub.id];
       const ref = fbDb.collection('classes').doc(cls.id).collection('submissions').doc(sub.id);
       await ref.update({ finalScore: Number(g.score), finalFeedback: g.feedback, status: 'released', releasedAt: Date.now() });
-      await fbDb.collection('classes').doc(cls.id).collection('messages').add({
-        fromRole: 'teacher', fromName: 'Cô',
-        text: `📊 Kết quả "${asg.title}" của ${sub.studentName}: ${g.score}đ — ${g.feedback}`,
-        at: Date.now()
-      });
       setGrades(prev => ({ ...prev, [sub.id]: { ...prev[sub.id], status: 'released' } }));
     }
     setSending(false);
-    alert(`✅ Đã gửi kết quả cho ${ready.length} học sinh!`);
+    alert(`✅ Đã gửi riêng kết quả cho ${ready.length} học sinh!`);
   };
 
   const totalSubs = subs.length;
@@ -1915,7 +1912,7 @@ const BatchGradeView = ({ cls, asg, fbUser, data, onBack }) => {
         </button>
         <button onClick={releaseAll} disabled={sending || graded === 0}
           className="text-[10px] px-2.5 py-1 rounded-lg font-medium text-white" style={{background: sending || graded === 0 ? '#ccc' : '#d97706'}}>
-          {sending ? 'Đang gửi...' : `📤 Gửi tất cả (${graded - released})`}
+          {sending ? 'Đang gửi...' : `📤 Gửi riêng tất cả (${graded - released})`}
         </button>
       </div>
 
@@ -3333,6 +3330,8 @@ Viết bằng tiếng Việt, rõ ràng, thực dụng — GV đọc là dùng �
 
   const handleSave = () => {
     if (!form.title.trim()) { alert('Nhập tiêu đề'); return; }
+    const hasQuestions = (form.questions && form.questions.length > 0) || (form.questionText && form.questionText.trim());
+    if (!hasQuestions && !confirm('⚠️ Đề này CHƯA có câu hỏi nào (chưa bấm "AI tạo tự động" hoặc chưa soạn thủ công). Vẫn lưu đề trống?')) return;
     const list = data.exams || [];
     setData({ ...data, exams: isEdit ? list.map(i => i.id === form.id ? form : i) : [...list, form] });
     onClose();
