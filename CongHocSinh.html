@@ -30,6 +30,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<!-- Xem tài liệu PDF/Word (chỉ xem, không tải máy đọc file gốc) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.0/dist/docx-preview.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
@@ -191,6 +194,66 @@ const parseQuestions = (body) => {
 const stripLabel = (t) => String(t || '').replace(/^\s*(?:Câu\s*\d+|\d{1,2})\s*[\.\:\)]?\s*/i, '').trim();
 const countChars = (s) => (s || '').length;
 const countWords = (s) => { const t = (s || '').trim(); return t ? t.split(/\s+/).length : 0; };
+
+// ============== XEM TÀI LIỆU (PDF/Word) — CHỈ XEM, KHÔNG TẢI VỀ ==============
+if (window.pdfjsLib) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+const MaterialViewer = ({ m, onClose }) => {
+  const [status, setStatus] = useState('loading'); // loading | ready | error
+  const hostRef = useRef(null);
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const resp = await fetch(m.fileUrl);
+        if (!resp.ok) throw new Error('Không tải được file (HTTP ' + resp.status + ')');
+        const buf = await resp.arrayBuffer();
+        if (cancelled) return;
+        if (m.fileType === 'pdf') {
+          const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+          if (cancelled) return;
+          const host = hostRef.current;
+          host.innerHTML = '';
+          for (let p = 1; p <= pdf.numPages; p++) {
+            const page = await pdf.getPage(p);
+            const scale = Math.min(2, (host.clientWidth || 350) / page.getViewport({ scale: 1 }).width);
+            const viewport = page.getViewport({ scale });
+            const canvas = document.createElement('canvas');
+            canvas.width = viewport.width; canvas.height = viewport.height;
+            canvas.style.width = '100%'; canvas.style.marginBottom = '10px'; canvas.style.borderRadius = '10px'; canvas.style.boxShadow = '0 2px 10px rgba(0,0,0,.08)';
+            await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+            if (cancelled) return;
+            host.appendChild(canvas);
+          }
+        } else if (m.fileType === 'docx') {
+          const host = hostRef.current;
+          host.innerHTML = '';
+          await window.docx.renderAsync(buf, host, undefined, { inWrapper: true, ignoreWidth: false });
+        }
+        if (!cancelled) setStatus('ready');
+      } catch (e) {
+        if (!cancelled) setStatus('error');
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [m.fileUrl]);
+  return (
+    <div className="fixed inset-0 bg-black/70 z-[70] flex flex-col">
+      <div className="flex items-center gap-3 px-4 py-3 bg-white shadow shrink-0">
+        <button onClick={onClose} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">✕</button>
+        <p className="font-semibold text-sm truncate flex-1">{m.fileType === 'pdf' ? '📕' : '📘'} {m.title}</p>
+      </div>
+      <div className="flex-1 overflow-y-auto p-3" onContextMenu={e => e.preventDefault()} style={{ userSelect: 'none' }}>
+        {status === 'loading' && <div className="text-center py-16 text-slate-400"><Spinner /><p className="mt-2 text-sm">Đang tải tài liệu...</p></div>}
+        {status === 'error' && <p className="text-center py-16 text-rose-500 text-sm">Không mở được tài liệu. Em thử lại hoặc báo cô nhé 🌸</p>}
+        <div ref={hostRef} className="max-w-2xl mx-auto"></div>
+      </div>
+      <p className="text-center text-[11px] text-white/70 py-2 shrink-0">👁 Chỉ xem trên Cổng, không tải xuống được nhé</p>
+    </div>
+  );
+};
 
 // Nén ảnh về tối đa ~1000px, JPEG chất lượng 0.7 để lưu gọn (chụp bài viết tay).
 const fileToDataURL = (file, maxW = 1000, q = 0.72) => new Promise((res, rej) => {
@@ -936,6 +999,7 @@ const StudentHome = ({ sv, onLeave }) => {
   const [tab, setTab] = useState('bai');
   const [assignments, setAssignments] = useState([]);
   const [materials, setMaterials] = useState([]);
+  const [viewMat, setViewMat] = useState(null);
   const [mySubs, setMySubs] = useState({});
   const [doing, setDoing] = useState(null);
   const [msgNewest, setMsgNewest] = useState(0);
@@ -1036,11 +1100,13 @@ const StudentHome = ({ sv, onLeave }) => {
         {tab === 'tailieu' && <div className="fade-in">
           {materials.length === 0 && <div className="glass rounded-3xl p-10 text-center"><div className="text-5xl mb-2">📚</div><p className="text-slate-500 font-medium">Chưa có tài liệu nào.</p></div>}
           {materials.map(m => <div key={m.id} className="glass rounded-3xl p-5 mb-3.5 shadow-lg pop">
-            <p className="font-bold text-[15px] text-slate-800">📚 {m.title}</p>
+            <p className="font-bold text-[15px] text-slate-800">{m.fileType === 'pdf' ? '📕' : m.fileType === 'docx' ? '📘' : '📚'} {m.title}</p>
             {m.content && <p className="text-sm text-slate-600 mt-1.5 whitespace-pre-wrap leading-relaxed">{m.content}</p>}
-            {m.url && <a href={m.url} target="_blank" rel="noopener noreferrer" className="btn-grad inline-block mt-3 px-4 py-2 rounded-xl text-sm font-semibold" style={{ '--a': theme.a, '--b': theme.b }}>🔗 Mở tài liệu</a>}
+            {m.fileUrl && <button onClick={() => setViewMat(m)} className="btn-grad inline-block mt-3 px-4 py-2 rounded-xl text-sm font-semibold" style={{ '--a': theme.a, '--b': theme.b }}>👁 Xem tài liệu</button>}
+            {m.url && <a href={m.url} target="_blank" rel="noopener noreferrer" className="btn-grad inline-block mt-3 px-4 py-2 rounded-xl text-sm font-semibold ml-2" style={{ '--a': theme.a, '--b': theme.b }}>🔗 Mở tài liệu</a>}
           </div>)}
         </div>}
+        {viewMat && <MaterialViewer m={viewMat} onClose={() => setViewMat(null)} />}
         {tab === 'diem' && <div className="fade-in">
           {Object.values(mySubs).filter(s => s.status === 'released').length === 0 && <div className="glass rounded-3xl p-10 text-center"><div className="text-5xl mb-2">🏆</div><p className="text-slate-500 font-medium">Chưa có điểm nào được trả.</p></div>}
           {Object.values(mySubs).filter(s => s.status === 'released').map(s => {
