@@ -2,6 +2,8 @@
 
 > **Dành cho session mới:** File này tóm tắt toàn bộ trạng thái dự án. Đọc xong là có thể tiếp tục ngay, không cần hỏi lại cô Thu.
 > **Cập nhật lần cuối:** 2026-09-03 — Bỏ hẳn hướng Zalo, chuyển hoàn toàn sang "Lớp Học Kết Nối" (Firebase) + Cổng Lớp Học. Đã sửa xong cả 3 đợt lỗi từ báo cáo kiểm tra toàn diện (29 phát hiện).
+>
+> **🔴 Netlify đang ĐÓNG BĂNG kể từ 2026-09-03:** Team hết "operational credits", production deploy bị tạm dừng (site cũ vẫn chạy, không sập, nhưng KHÔNG tự build bản mới nữa). Bản đang chạy trên `trolygiaovien.netlify.app` dừng lại ở **29/8** — nghĩa là **CHƯA có** toàn bộ các bản vá từ 30/8 trở đi, kể cả bản vá RIÊNG TƯ quan trọng nhất (lộ điểm học sinh, xem mục "Đã hoàn thành"). GitHub Pages (`docs/`) thì build tự động qua GitHub Actions, KHÔNG phụ thuộc credit Netlify, nên đang có đủ bản mới nhất. **→ Cho đến khi Netlify resume (xem Team settings → Billing → Usage) hoặc cô Thu nâng cấp gói, dùng `thinhdv123456.github.io/tro-ly-giao-vien/` làm link CHÍNH, không phải link dự phòng nữa.** Khi Netlify build lại bình thường (kiểm tra: vào tab Deploys, thấy build khớp commit mới nhất = "Published"), gỡ ghi chú này.
 
 ---
 
@@ -45,7 +47,7 @@ Chế độ "chữ đậm hơn" (bật qua nút Aa) toggle class `text-strong` t
 | `CongHocSinh.html` ⭐ | **Cổng Lớp Học** — cho HỌC SINH/PHỤ HUYNH, deploy ở đường dẫn `/cong` | ✅ Sản xuất |
 | `trolygv_server.py` | Máy chủ nội bộ (chạy `python3 trolygv_server.py`, cổng 8765) — lưu dữ liệu ra file thật + proxy gọi Claude API (tránh CORS) khi mở app dạng file cục bộ | 🖥️ Tuỳ chọn, chạy trên máy cô |
 | `netlify.toml` | Cấu hình build Netlify — copy 2 file HTML trên thành `dist/index.html` + `dist/cong.html`, định tuyến `/cong`, `/api/claude/message` | ⚙️ Build |
-| `docs/index.html`, `docs/cong/index.html` | Bản sao dự phòng, host trên **GitHub Pages** (miễn phí, không giới hạn credit như Netlify) — **PHẢI đồng bộ tay** mỗi lần sửa file chính (xem Quy tắc #8) | 🚀 Deploy dự phòng |
+| `docs/index.html`, `docs/cong/index.html` | Host trên **GitHub Pages** (miễn phí, không giới hạn credit như Netlify) — **PHẢI đồng bộ tay** mỗi lần sửa file chính (xem Quy tắc #8) | 🚀 **Đang là link CHÍNH** (Netlify đóng băng từ 2026-09-03, xem cảnh báo đầu file) |
 
 Các file `TroLyGiaoVien_Phase1/2/3.html`, `TroLyGiaoVien_Phase4_Groq_v2_UPDATED.html`, `deploy/` là bản cũ/lưu trữ, không dùng để deploy.
 
@@ -60,13 +62,13 @@ Các file `TroLyGiaoVien_Phase1/2/3.html`, `TroLyGiaoVien_Phase4_Groq_v2_UPDATED
 - Tailwind CSS qua CDN
 - **Firebase** (Auth + Firestore) — nguồn dữ liệu CHÍNH cho "Lớp Học Kết Nối" + Cổng Lớp Học; LocalStorage chỉ là cache/dự phòng cho phần soạn bài/ra đề (không đăng nhập vẫn dùng được, nhưng không đồng bộ đa thiết bị)
 - Claude API (chất lượng cao, đọc được ảnh — bắt buộc cho chấm bài chụp tay) / Groq API (nhanh, miễn phí, gọi thẳng từ trình duyệt) / Ollama (local, offline) — chọn trong "Cài đặt AI"
-- Export Word: Blob + HTML trick; Export PDF: html2pdf.js/jsPDF; ⚠️ nút "PowerPoint" ở LessonModal **thực ra xuất PDF**, chưa phải .pptx thật (biết là bug, chưa sửa)
+- Export Word: Blob + HTML trick; Export PDF: html2pdf.js/jsPDF; nút xuất slide ở LessonModal ghi đúng là **"Xuất Slide (PDF)"** — thực chất xuất PDF trình bày dạng slide, không phải .pptx thật (đã sửa nhãn cho khớp thực tế ở Đợt 3, xem mục "Việc còn tồn đọng" nếu sau này cần .pptx thật)
 
 **Quy trình đưa lên mạng (đầy đủ):**
 1. Sửa code → parse thử bằng **Babel THẬT** (xem lệnh mẫu ở Quy tắc #4, không chỉ đếm ngoặc) → chỉ push khi "BABEL PARSE OK"
 2. `cp TroLyGiaoVien_Phase4_REFACTORED.html docs/index.html` + `cp CongHocSinh.html docs/cong/index.html` (đồng bộ GitHub Pages)
 3. `git add` + `git commit` + `git push origin main`
-4. Netlify tự build từ `main` (qua `netlify.toml`) → `trolygiaovien.netlify.app`. GitHub Pages tự build từ thư mục `docs/` trên `main` → `thinhdv123456.github.io/tro-ly-giao-vien/` (dự phòng khi Netlify hết credit build hàng tháng — đã từng xảy ra)
+4. Netlify tự build từ `main` (qua `netlify.toml`) → `trolygiaovien.netlify.app`. GitHub Pages tự build từ thư mục `docs/` trên `main` → `thinhdv123456.github.io/tro-ly-giao-vien/`. **Netlify có credit build giới hạn theo tháng, từng hết nhiều lần** (hết hẳn từ 2026-09-03, xem cảnh báo đầu file) — khi hết, Netlify **không báo lỗi gì**, chỉ âm thầm ngừng build và tiếp tục phục vụ bản cũ, nên đừng mặc định "đã push thì Netlify chắc chắn có bản mới" — luôn kiểm tra tab Deploys trên Netlify khớp đúng commit trước khi báo cô Thu là "đã lên bản mới". GitHub Pages build qua GitHub Actions riêng, không dùng chung credit này nên luôn đáng tin hơn để xác nhận đã deploy thành công.
 5. **Firebase yêu cầu domain phải nằm trong "Authorized domains"** (Firebase Console → Authentication → Settings) mới hoạt động được — Netlify domain đã được cấp, **GitHub Pages domain (`thinhdv123456.github.io`) phải tự thêm tay 1 lần** nếu chưa có, nếu không Firestore sẽ báo lỗi 400 âm thầm (đã từng xảy ra + đã hướng dẫn cô Thu thêm).
 
 **Các menu/tab chính (MENU_ITEMS trong code):**
