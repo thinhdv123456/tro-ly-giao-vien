@@ -23,7 +23,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-storage-compat.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700;800&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
@@ -955,7 +954,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "265598885819",
   appId: "1:265598885819:web:afcf8cd9be76804cd36e9e"
 };
-let fbAuth = null, fbDb = null, fbStorage = null, fbReady = false;
+let fbAuth = null, fbDb = null, fbReady = false;
 const FB_CHUNK = 600000; // chia dữ liệu thành mảnh ~600KB để không vướng giới hạn 1MB/tài liệu của Firestore
 
 const initFirebase = () => {
@@ -965,7 +964,6 @@ const initFirebase = () => {
     if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
     fbAuth = firebase.auth();
     fbDb = firebase.firestore();
-    fbStorage = firebase.storage();
     try { fbDb.enablePersistence({ synchronizeTabs: true }).catch(() => {}); } catch {}
     fbReady = true;
     return true;
@@ -1136,7 +1134,7 @@ const APP_HELP_CONTEXT_DETAILS = `
 
 3. 📝 Đánh giá - Kiểm tra (ExamTab) — có các tab con bên trong: "Đề kiểm tra" (tạo đề theo ma trận × mức độ Bloom, chọn ngữ liệu, trắc nghiệm + tự luận, có rubric, xem trước Đề/Đáp án/Rubric), "🤖 Ra Đề Tự Động" (AI tự sinh đề theo loại văn bản: Văn học/Thông tin/Nghị luận/Hành chính), "📚 Kho Ngữ Liệu" (thêm/duyệt/dán nhanh ngữ liệu, có sẵn kho mẫu), "Ma trận đề", "Ngân hàng câu hỏi" (tự luận + trắc nghiệm A/B/C/D).
 
-4. 👥 "Lớp Học Kết Nối" (mục ghim đầu menu, cần đăng nhập tài khoản đám mây ở Cài đặt): dữ liệu đồng bộ qua đám mây (Firebase) theo thời gian thực — quản lý lớp, giao bài, học sinh nộp bài/nhắn tin qua "Cổng Lớp Học" (link /cong), cô chấm bài (chấm tay hoặc AI, bài chụp ảnh chữ viết tay BẮT BUỘC dùng nguồn AI "Claude" vì Groq/Ollama không đọc được ảnh), xem báo cáo lớp. Vào chi tiết 1 lớp có tab "📚 Tài liệu" để tải file PDF/Word (.docx, tối đa 20MB) hoặc dán link cho học sinh xem — học sinh chỉ XEM trên Cổng (không tải file gốc về máy được), cô xoá được bất cứ lúc nào. Đây là hệ thống quản lý lớp DUY NHẤT của chương trình (không còn dùng Zalo nữa).
+4. 👥 "Lớp Học Kết Nối" (mục ghim đầu menu, cần đăng nhập tài khoản đám mây ở Cài đặt): dữ liệu đồng bộ qua đám mây (Firebase) theo thời gian thực — quản lý lớp, giao bài, học sinh nộp bài/nhắn tin qua "Cổng Lớp Học" (link /cong), cô chấm bài (chấm tay hoặc AI, bài chụp ảnh chữ viết tay BẮT BUỘC dùng nguồn AI "Claude" vì Groq/Ollama không đọc được ảnh), xem báo cáo lớp. Vào chi tiết 1 lớp có tab "📚 Tài liệu" (hoặc mục "Tài liệu" trong popup "Xem lớp" ở Dashboard) để dán link tài liệu (Google Drive, YouTube...) + ghi chú cho học sinh xem, xoá được bất cứ lúc nào. Đây là hệ thống quản lý lớp DUY NHẤT của chương trình (không còn dùng Zalo nữa).
 
 5. 🎒 Cổng Lớp Học (đường dẫn riêng /cong, KHÔNG nằm trong menu chính — dùng để CHIA SẺ CHO HỌC SINH/PHỤ HUYNH, không phải cho giáo viên dùng): học sinh nhập mã lớp + họ tên để vào, xem bài tập, nộp bài (gõ chữ hoặc chụp ảnh), xem điểm & nhận xét, nhắn tin riêng với cô, có thể "Cài vào màn hình chính" như 1 app điện thoại.
 
@@ -7336,15 +7334,6 @@ const OcNewAsg = ({ cls, fbUser, data, onClose }) => {
     <button onClick={create} disabled={busy} className="btn-accent w-full">{busy?'Đang giao...':'Giao cho lớp '+cls.name}</button>
   </OcModal>;
 };
-const OC_MATERIAL_MAX_MB = 20;
-const OC_MATERIAL_TYPES = { 'application/pdf': 'pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx' };
-const ocMaterialTypeFromFile = (file) => {
-  if (OC_MATERIAL_TYPES[file.type]) return OC_MATERIAL_TYPES[file.type];
-  const ext = (file.name.split('.').pop() || '').toLowerCase();
-  if (ext === 'pdf') return 'pdf';
-  if (ext === 'docx') return 'docx';
-  return null;
-};
 const OcMaterials = ({ cls, fbUser }) => {
   const [items, setItems] = useState([]);
   const [showNew, setShowNew] = useState(false);
@@ -7356,8 +7345,7 @@ const OcMaterials = ({ cls, fbUser }) => {
   const remove = async (m) => {
     if (!confirm(`Xoá tài liệu "${m.title}"? Học sinh sẽ không xem được nữa.`)) return;
     try { await fbDb.collection('classes').doc(cls.id).collection('materials').doc(m.id).delete(); }
-    catch (e) { alert('Lỗi xoá: ' + (e && e.message ? e.message : e)); return; }
-    if (m.filePath) { try { await fbStorage.ref(m.filePath).delete(); } catch (e) {} }
+    catch (e) { alert('Lỗi xoá: ' + (e && e.message ? e.message : e)); }
   };
   return <div>
     <button onClick={() => setShowNew(true)} className="btn-accent mb-4 flex items-center gap-2"><Icon name="Plus" size={16} /> Thêm tài liệu</button>
@@ -7366,11 +7354,8 @@ const OcMaterials = ({ cls, fbUser }) => {
       <div key={m.id} className="soft-card p-4 mb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-teal-900 flex items-center gap-1.5">
-              {m.fileType === 'pdf' ? '📕' : m.fileType === 'docx' ? '📘' : '📚'} {m.title}
-            </p>
+            <p className="font-semibold text-teal-900">📚 {m.title}</p>
             {m.content && <p className="text-sm text-slate-600 mt-1 whitespace-pre-wrap">{m.content}</p>}
-            {m.fileName && <p className="text-xs text-slate-400 mt-1">{m.fileName}{m.fileSizeKB ? ' · ' + Math.round(m.fileSizeKB) + ' KB' : ''}</p>}
             {m.url && <a href={m.url} target="_blank" rel="noopener noreferrer" className="text-sm text-teal-600 underline mt-1 inline-block break-all">🔗 {m.url}</a>}
           </div>
           <button onClick={() => remove(m)} className="text-xs text-rose-500 shrink-0">Xoá</button>
@@ -7381,54 +7366,28 @@ const OcMaterials = ({ cls, fbUser }) => {
   </div>;
 };
 const OcNewMaterial = ({ cls, fbUser, onClose }) => {
-  const [title, setTitle] = useState(''); const [content, setContent] = useState(''); const [url, setUrl] = useState('');
-  const [file, setFile] = useState(null); const [busy, setBusy] = useState(false); const [progress, setProgress] = useState(0);
-  const fileRef = useRef(null);
-  const pickFile = (f) => {
-    if (!f) { setFile(null); return; }
-    const type = ocMaterialTypeFromFile(f);
-    if (!type) { alert('Chỉ nhận file PDF (.pdf) hoặc Word (.docx). File này không đúng định dạng.'); if (fileRef.current) fileRef.current.value = ''; return; }
-    if (f.size > OC_MATERIAL_MAX_MB * 1024 * 1024) { alert(`File quá nặng (tối đa ${OC_MATERIAL_MAX_MB}MB). Chọn file nhỏ hơn giúp tôi.`); if (fileRef.current) fileRef.current.value = ''; return; }
-    setFile(f);
-  };
+  const [title, setTitle] = useState(''); const [content, setContent] = useState(''); const [url, setUrl] = useState(''); const [busy, setBusy] = useState(false);
   const create = async () => {
     if (!title.trim()) { alert('Nhập tên tài liệu.'); return; }
-    if (!file && !url.trim() && !content.trim()) { alert('Cần ít nhất 1 trong 3: file đính kèm, đường dẫn, hoặc ghi chú nội dung.'); return; }
-    setBusy(true); setProgress(0);
+    if (!url.trim() && !content.trim()) { alert('Cần ít nhất đường dẫn hoặc ghi chú nội dung.'); return; }
+    setBusy(true);
     try {
-      const docRef = fbDb.collection('classes').doc(cls.id).collection('materials').doc();
-      let fileFields = {};
-      if (file) {
-        const type = ocMaterialTypeFromFile(file);
-        const path = `classes/${cls.id}/materials/${docRef.id}/${file.name}`;
-        const task = fbStorage.ref(path).put(file);
-        await new Promise((resolve, reject) => {
-          task.on('state_changed',
-            snap => setProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
-            reject, resolve);
-        });
-        const fileUrl = await task.snapshot.ref.getDownloadURL();
-        fileFields = { fileUrl, filePath: path, fileName: file.name, fileType: type, fileSizeKB: file.size / 1024 };
-      }
-      await docRef.set({ title: title.trim(), content: content.trim(), url: url.trim(), createdAt: Date.now(), createdBy: fbUser.uid, ...fileFields });
+      await fbDb.collection('classes').doc(cls.id).collection('materials').add({ title: title.trim(), content: content.trim(), url: url.trim(), createdAt: Date.now(), createdBy: fbUser.uid });
       onClose();
     } catch (e) {
-      alert('Tải tài liệu lên thất bại: ' + (e && e.message ? e.message : e));
-      setBusy(false);
+      alert('Lưu tài liệu thất bại: ' + (e && e.message ? e.message : e));
     }
+    setBusy(false);
   };
   return <OcModal title="Thêm tài liệu" onClose={onClose}>
     <label className="block text-sm font-medium mb-1">Tên tài liệu</label>
     <input value={title} onChange={e => setTitle(e.target.value)} placeholder="VD: Sơ đồ tư duy bài Sang thu" className="w-full px-3 py-2.5 border rounded-xl mb-3" />
-    <label className="block text-sm font-medium mb-1">File đính kèm (PDF hoặc Word .docx, tối đa {OC_MATERIAL_MAX_MB}MB)</label>
-    <input ref={fileRef} type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={e => pickFile(e.target.files[0])} className="w-full text-sm mb-1" />
-    {file && <p className="text-xs text-emerald-600 mb-2">✓ Đã chọn: {file.name} ({Math.round(file.size / 1024)} KB)</p>}
-    {busy && file && <div className="w-full bg-slate-100 rounded-full h-2 mb-3 overflow-hidden"><div className="bg-teal-500 h-2 rounded-full transition-all" style={{ width: progress + '%' }}></div></div>}
-    <label className="block text-sm font-medium mb-1 mt-2">Ghi chú (tuỳ chọn)</label>
+    <label className="block text-sm font-medium mb-1">Ghi chú (tuỳ chọn)</label>
     <textarea value={content} onChange={e => setContent(e.target.value)} rows={3} placeholder="Ghi chú/tóm tắt cho học sinh..." className="w-full px-3 py-2.5 border rounded-xl mb-3 text-sm" />
-    <label className="block text-sm font-medium mb-1">Đường dẫn ngoài (tuỳ chọn)</label>
-    <input value={url} onChange={e => setUrl(e.target.value)} placeholder="VD: link Google Drive, YouTube..." className="w-full px-3 py-2.5 border rounded-xl mb-4" />
-    <button onClick={create} disabled={busy} className="btn-accent w-full">{busy ? (file ? `Đang tải lên... ${progress}%` : 'Đang lưu...') : 'Thêm cho lớp ' + cls.name}</button>
+    <label className="block text-sm font-medium mb-1">Đường dẫn tài liệu (tuỳ chọn)</label>
+    <input value={url} onChange={e => setUrl(e.target.value)} placeholder="VD: link Google Drive, YouTube..." className="w-full px-3 py-2.5 border rounded-xl mb-1" />
+    <p className="text-xs text-slate-400 mb-4">Mẹo: tải file PDF/Word lên Google Drive của cô → bấm "Chia sẻ" → chọn "Bất kỳ ai có đường liên kết" → dán link vào đây.</p>
+    <button onClick={create} disabled={busy} className="btn-accent w-full">{busy ? 'Đang lưu...' : 'Thêm cho lớp ' + cls.name}</button>
   </OcModal>;
 };
 const OcSubmissions = ({ cls, asg, onBack }) => {

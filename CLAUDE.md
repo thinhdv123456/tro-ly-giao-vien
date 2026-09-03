@@ -70,7 +70,7 @@ Các file `TroLyGiaoVien_Phase1/2/3.html`, `TroLyGiaoVien_Phase4_Groq_v2_UPDATED
 3. `git add` + `git commit` + `git push origin main`
 4. Netlify tự build từ `main` (qua `netlify.toml`) → `trolygiaovien.netlify.app`. GitHub Pages tự build từ thư mục `docs/` trên `main` → `thinhdv123456.github.io/tro-ly-giao-vien/`. **Netlify có credit build giới hạn theo tháng, từng hết nhiều lần** (hết hẳn từ 2026-09-03, xem cảnh báo đầu file) — khi hết, Netlify **không báo lỗi gì**, chỉ âm thầm ngừng build và tiếp tục phục vụ bản cũ, nên đừng mặc định "đã push thì Netlify chắc chắn có bản mới" — luôn kiểm tra tab Deploys trên Netlify khớp đúng commit trước khi báo cô Thu là "đã lên bản mới". GitHub Pages build qua GitHub Actions riêng, không dùng chung credit này nên luôn đáng tin hơn để xác nhận đã deploy thành công.
 5. **Firebase yêu cầu domain phải nằm trong "Authorized domains"** (Firebase Console → Authentication → Settings) mới hoạt động được — Netlify domain đã được cấp, **GitHub Pages domain (`thinhdv123456.github.io`) phải tự thêm tay 1 lần** nếu chưa có, nếu không Firestore sẽ báo lỗi 400 âm thầm (đã từng xảy ra + đã hướng dẫn cô Thu thêm).
-6. **Firebase Storage cần bật Rules riêng** (Firebase Console → Storage → Rules) cho tính năng "Tài liệu" (mục #Materials bên dưới) mới hoạt động đúng — xem nguyên văn Rules cần dán ở mục đó.
+6. **KHÔNG dùng Firebase Storage** — đã thử cho tính năng "Tài liệu" (2026-09-03) nhưng Google giờ bắt buộc gói trả phí "Blaze" (cần gắn thẻ ngân hàng) mới bật được Storage, cô Thu không muốn gắn thẻ nên đã bỏ, quay về dùng link (xem mục #Materials bên dưới). **Đừng đề xuất lại Storage trừ khi cô Thu chủ động đổi ý.**
 
 **Các menu/tab chính (MENU_ITEMS trong code):**
 - `online` (ghim đầu menu) → **`OnlineClassTab`** = "Lớp Học Kết Nối" — quản lý lớp/giao bài/chấm bài/báo cáo, DUY NHẤT còn lại, dùng Firebase. Các component: `OcNewClass, OcClassDetail, OcNewAsg, OcSubmissions, OcGrade, OcMessages, OcMaterials, OcNewMaterial`...
@@ -90,25 +90,10 @@ Các file `TroLyGiaoVien_Phase1/2/3.html`, `TroLyGiaoVien_Phase4_Groq_v2_UPDATED
 - `DoAssignment` — bắt buộc chọn 1 trong 2 cách làm bài TRƯỚC khi bắt đầu: **Làm trực tiếp** (mỗi câu 1 ô + đếm từ) hoặc **Nộp bằng ảnh chụp** (mở thẳng camera, tối đa 10 ảnh, tự kiểm tra độ nét bằng phương sai Laplacian — `isImageBlurry()` — cảnh báo nếu mờ nhưng vẫn cho dùng nếu HS xác nhận)
 - ⚠️ Biết nhưng CHƯA sửa (xem báo cáo kiểm tra toàn diện đã gửi cô Thu 2026-09-03): chưa có nút thoát màn làm bài mà không nộp; chưa đổi lại được cách làm bài (type/photo) sau khi đã chọn.
 
-**#Materials — Tài liệu lớp (2026-09-03, thêm tải file thật):** Theo yêu cầu cô Thu: **CHỈ tải/thêm/xoá tài liệu ở chương trình chính** (`TroLyGiaoVien_Phase4_REFACTORED.html` → `OnlineClassTab` → vào 1 lớp → tab "📚 Tài liệu" → `OcMaterials`/`OcNewMaterial`), **KHÔNG có ở Cổng** kể cả `?gv` (Cổng phần giáo viên `ClassDetail`/`NewMaterialModal`/`MaterialsView` **cố tình để nguyên không đụng tới**, chỉ còn hỗ trợ tài liệu kiểu text/link cũ, không có file — cô Thu không dùng đường này, xem toàn bộ trên chương trình chính kể cả trên điện thoại vì đã responsive).
-- Nhận file **PDF hoặc Word (.docx)**, tối đa **20MB**, tải lên **Firebase Storage** (bucket đã có sẵn trong `FIREBASE_CONFIG`, chỉ cần thêm SDK `firebase-storage-compat.js`) tại đường dẫn `classes/{classId}/materials/{materialId}/{tên file}`. Doc Firestore `classes/{id}/materials/{materialId}` có thêm field `fileUrl, filePath, fileName, fileType (pdf|docx), fileSizeKB` bên cạnh `title/content/url` cũ.
-- Học sinh xem trên Cổng qua `MaterialViewer` (trong `CongHocSinh.html`) — **chỉ xem, không có nút tải**: PDF vẽ từng trang ra `<canvas>` bằng **PDF.js** (CDN cdnjs), Word (.docx) render trực tiếp bằng thư viện **`docx-preview`** (CDN jsdelivr, global `window.docx.renderAsync`) — khoá chuột phải trong vùng xem. Đây là hạn chế tải xuống THÔNG THƯỜNG, không phải bảo mật tuyệt đối (HS cố tình dùng devtools vẫn lấy được URL gốc — đã nói rõ với cô Thu).
-- ⚠️ **Chưa test được bằng trình duyệt thật** (sandbox không gọi ra được CDN ngoài để tự kiểm) — đã parse Babel OK nhưng **cô Thu cần tự thử tải 1 file PDF + 1 file Word thật lên rồi xem qua Cổng**, báo lại nếu file Word không hiển thị đúng (khả năng cao nhất nếu lỗi: tên global `docx` hoặc tên hàm `renderAsync` của bản `docx-preview@0.3.0` không đúng như dự kiến — sửa nhanh nếu đúng vậy).
-- **Cần làm ở Firebase Console → Storage → Rules** (bắt buộc, nếu không sẽ báo lỗi permission-denied khi tải file):
-  ```
-  rules_version = '2';
-  service firebase.storage {
-    match /b/{bucket}/o {
-      match /classes/{classId}/materials/{materialId}/{fileName} {
-        allow read: if true;
-        allow write: if request.auth != null
-          && request.auth.token.firebase.sign_in_provider != 'anonymous'
-          && firestore.get(/databases/(default)/documents/classes/$(classId)).data.teacherUid == request.auth.uid;
-      }
-    }
-  }
-  ```
-  (`read: true` vì URL tải về của Firebase Storage tự mang theo token riêng, ai có URL đều xem được — đúng ý đồ vì HS xem qua đúng doc Firestore đã được lọc theo lớp; `write` chỉ cho tài khoản KHÔNG ẩn danh (loại học sinh, vốn đăng nhập ẩn danh) và đúng là giáo viên sở hữu lớp đó.)
+**#Materials — Tài liệu lớp (2026-09-03):** Theo yêu cầu cô Thu: **CHỈ thêm/xoá tài liệu ở chương trình chính** (`TroLyGiaoVien_Phase4_REFACTORED.html` → tab "📚 Tài liệu" trong `OcClassDetail`, hoặc mục "📚 Tài liệu" trong popup "Xem lớp" ở `Dashboard` — cả 2 chỗ đều dùng chung component `OcMaterials`/`OcNewMaterial`), **KHÔNG có ở Cổng** kể cả `?gv` (Cổng phần giáo viên `ClassDetail`/`NewMaterialModal`/`MaterialsView` cố tình để nguyên không đụng tới — cô Thu không dùng đường này, xem toàn bộ trên chương trình chính kể cả trên điện thoại vì đã responsive).
+- **Chỉ dán link (Google Drive, YouTube...) + ghi chú, KHÔNG tải file thật lên** — doc Firestore `classes/{id}/materials/{materialId}` chỉ có `title/content/url/createdAt/createdBy`, không có field file nào.
+- **Lý do bỏ upload file thật:** đã thử làm bằng Firebase Storage (PDF.js hiển thị PDF + `docx-preview` hiển thị Word, học sinh chỉ xem không tải về được) nhưng Google bắt buộc gói Blaze (cần gắn thẻ) mới bật được Storage — cô Thu chọn không gắn thẻ, nên đã bỏ hẳn hướng này (xem Quy tắc Firebase #6 ở trên). Học sinh giờ mở tài liệu bằng cách bấm link → mở tab mới (giống mọi link ngoài khác trong app), không có cơ chế "chỉ xem không tải" nữa vì bản chất là mở file trên Google Drive của cô.
+- Gợi ý cho cô Thu (đã ghi sẵn trong form "Thêm tài liệu"): tải file PDF/Word lên Google Drive của cô → "Chia sẻ" → chọn "Bất kỳ ai có đường liên kết" (chỉ xem) → dán link vào ô "Đường dẫn tài liệu".
 
 ---
 
