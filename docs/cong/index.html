@@ -1100,15 +1100,19 @@ const DoAssignment = ({ sv, asg, sub, onDone }) => {
   const [imgBusy, setImgBusy] = useState(false);
   const [reviewPhoto, setReviewPhoto] = useState(null); // { dataUrl, blurry } — ảnh vừa chụp, chờ HS xác nhận
   const fileRef = useRef(null);
-  const [startedAt] = useState(sub && sub.startedAt ? sub.startedAt : Date.now());
+  const [startedAt, setStartedAt] = useState(sub && sub.startedAt ? sub.startedAt : null);
   const [remain, setRemain] = useState(0);
   const submittedRef = useRef(false);
   const MAX_PHOTOS = 10;
   const buildCombined = (ans) => qs.map((q, i) => `${q.label || (parsed.single ? 'Bài làm' : 'Câu ' + (i + 1))}:\n${(ans[i] || '').trim()}`).join('\n\n');
   useEffect(() => {
-    if (!sub || !sub.startedAt) ref.set({ assignmentId: asg.id, studentAuthUid: auth.currentUser.uid, studentName: sv.name, answer: '', answersByQ: {}, startedAt, status: 'in_progress' }, { merge: true });
-  }, []);
-  const setMode = (m) => { setModeState(m); ref.update({ mode: m }).catch(() => {}); };
+    if (startedAt != null && (!sub || !sub.startedAt)) ref.set({ assignmentId: asg.id, studentAuthUid: auth.currentUser.uid, studentName: sv.name, answer: '', answersByQ: {}, startedAt, mode, status: 'in_progress' }, { merge: true });
+  }, [startedAt]);
+  const setMode = (m) => {
+    setModeState(m);
+    if (m && startedAt == null) setStartedAt(Date.now());
+    ref.set({ mode: m }, { merge: true }).catch(() => {});
+  };
   // Chụp 1 ảnh -> kiểm tra độ nét -> đưa vào màn hình xác nhận (không tự thêm ngay).
   const captureOnePhoto = async (file) => {
     if (!file) return;
@@ -1135,6 +1139,7 @@ const DoAssignment = ({ sv, asg, sub, onDone }) => {
     onDone();
   };
   useEffect(() => {
+    if (startedAt == null) return; // chưa chọn cách làm bài -> chưa tính giờ, tránh tự nộp oan
     const tick = () => {
       const byDur = asg.durationMin * 60 - Math.floor((Date.now() - startedAt) / 1000);
       const byDl = asg.deadline ? Math.floor((asg.deadline - Date.now()) / 1000) : Infinity;
@@ -1143,7 +1148,7 @@ const DoAssignment = ({ sv, asg, sub, onDone }) => {
       if (r <= 0) doSubmit(true);
     };
     tick(); const iv = setInterval(tick, 1000); return () => clearInterval(iv);
-  }, []);
+  }, [startedAt]);
   useEffect(() => { if (mode !== 'type') return; const t = setTimeout(() => { ref.update({ answersByQ: answers, answer: buildCombined(answers) }).catch(() => {}); }, 800); return () => clearTimeout(t); }, [answers, mode]);
   const setQ = (i, v) => setAnswers(a => ({ ...a, [i]: v }));
   const answeredCount = qs.filter((_, i) => (answers[i] || '').trim()).length;
@@ -1182,10 +1187,12 @@ const DoAssignment = ({ sv, asg, sub, onDone }) => {
         <div className="flex-1 min-w-0"><p className="font-bold hdr-title text-sm leading-tight truncate">{asg.title}</p><p className="text-[11px] text-white/90">{subtitle}</p></div>
         {mode && <button onClick={handleChangeMode} className="text-[11px] font-medium text-white/90 underline shrink-0 whitespace-nowrap">Đổi cách làm</button>}
       </div>
-      <div className={`px-5 py-3 flex items-center justify-between sticky top-[56px] z-10 shadow ${urgent ? 'bg-red-500 text-white animate-pulse' : 'glass text-slate-700'}`}>
-        <span className="text-sm font-medium">⏱ Thời gian còn lại</span>
-        <span className="text-2xl font-extrabold tracking-wider tabular-nums">{fmtTime(remain)}</span>
-      </div>
+      {startedAt != null && (
+        <div className={`px-5 py-3 flex items-center justify-between sticky top-[56px] z-10 shadow ${urgent ? 'bg-red-500 text-white animate-pulse' : 'glass text-slate-700'}`}>
+          <span className="text-sm font-medium">⏱ Thời gian còn lại</span>
+          <span className="text-2xl font-extrabold tracking-wider tabular-nums">{fmtTime(remain)}</span>
+        </div>
+      )}
     </>
   );
 

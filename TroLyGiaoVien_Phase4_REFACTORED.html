@@ -18,7 +18,6 @@
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <!-- ☁️ Firebase (đồng bộ đám mây) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
@@ -2861,7 +2860,7 @@ const LessonModal = ({ subTab, item, data, setData, selectedClass, selectedBook,
   const [form, setForm] = useState(item || { id: Date.now(), title: '', subtitle: '', grade: selectedClass, book: selectedBook, theme: '', lessonName: '', duration: '2 tiết', mucTieu: '', thietBi: '', hoatDong1: '', hoatDong2: '', hoatDong3: '', hoatDong4: '', phuLuc: '', slides: '', worksheetContent: '', activityContent: '', createdAt: new Date().toISOString() });
   const [showPreview, setShowPreview] = useState(false);
   const [showPptxDialog, setShowPptxDialog] = useState(false);
-  const [pptxOptions, setPptxOptions] = useState({ style: 'professional', slideCount: 'auto', includeNotes: true, includeNumbers: true });
+  const [pptxOptions, setPptxOptions] = useState({ style: 'professional', slideCount: 'auto', includeNumbers: true });
   const [isGeneratingPptx, setIsGeneratingPptx] = useState(false);
   const handleSave = () => {
     if (!form.title.trim()) { alert('Nhập tiêu đề'); return; }
@@ -3060,7 +3059,7 @@ const LessonModal = ({ subTab, item, data, setData, selectedClass, selectedBook,
           <div className="flex gap-2">
             <button onClick={() => exportToPDF('lesson-preview-' + form.id, `GiaoAn_${form.title.replace(/\s+/g, '_')}`)} className="px-4 py-2 bg-red-500 text-white rounded-lg flex items-center gap-2"><Icon name="FileText" size={16} /> PDF</button>
             <button onClick={() => exportToWord('lesson-preview-' + form.id, `GiaoAn_${form.title.replace(/\s+/g, '_')}`)} className="px-4 py-2 bg-blue-600 text-white rounded-lg flex items-center gap-2"><Icon name="FileDown" size={16} /> Word</button>
-            {isSlide && <button onClick={() => setShowPptxDialog(true)} disabled={isGeneratingPptx} className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-400 text-white rounded-lg flex items-center gap-2"><Icon name="Presentation" size={16} /> {isGeneratingPptx ? '⏳ Đang tạo...' : '📊 PowerPoint'}</button>}
+            {isSlide && <button onClick={() => setShowPptxDialog(true)} disabled={isGeneratingPptx} className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-400 text-white rounded-lg flex items-center gap-2"><Icon name="Presentation" size={16} /> {isGeneratingPptx ? '⏳ Đang tạo...' : '📄 Xuất Slide (PDF)'}</button>}
           </div>
           <div className="flex gap-2"><button onClick={onClose} className="px-4 py-2 bg-slate-200 rounded-lg">Hủy</button><button onClick={handleSave} className="px-4 py-2 bg-emerald-600 text-white rounded-lg flex items-center gap-2"><Icon name="Save" size={16} /> Lưu</button></div>
         </div>
@@ -3068,7 +3067,7 @@ const LessonModal = ({ subTab, item, data, setData, selectedClass, selectedBook,
       {showPptxDialog && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[60] modal-overlay">
           <div className="bg-white rounded-xl w-full max-w-md p-6 space-y-4 modal-box">
-            <h3 className="text-xl font-bold">📊 Tùy chọn PowerPoint</h3>
+            <h3 className="text-xl font-bold">📄 Tùy chọn xuất Slide (PDF)</h3>
             <div>
               <label className="block text-sm font-medium mb-2">🎨 Style</label>
               <div className="space-y-2">
@@ -3091,10 +3090,6 @@ const LessonModal = ({ subTab, item, data, setData, selectedClass, selectedBook,
             </div>
             <div className="space-y-2">
               <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={pptxOptions.includeNotes} onChange={e => setPptxOptions({...pptxOptions, includeNotes: e.target.checked})} />
-                <span className="text-sm">Thêm speaker notes</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={pptxOptions.includeNumbers} onChange={e => setPptxOptions({...pptxOptions, includeNumbers: e.target.checked})} />
                 <span className="text-sm">Thêm số slide</span>
               </label>
@@ -3102,7 +3097,7 @@ const LessonModal = ({ subTab, item, data, setData, selectedClass, selectedBook,
             <div className="flex gap-2">
               <button onClick={() => setShowPptxDialog(false)} className="flex-1 px-4 py-2 bg-slate-200 rounded-lg">Hủy</button>
               <button onClick={generateAndExportPptx} disabled={isGeneratingPptx} className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-400 text-white rounded-lg font-medium">
-                {isGeneratingPptx ? '⏳ Đang tạo...' : '🚀 Tạo PowerPoint'}
+                {isGeneratingPptx ? '⏳ Đang tạo...' : '🚀 Tạo file PDF'}
               </button>
             </div>
           </div>
@@ -3344,6 +3339,7 @@ Viết bằng tiếng Việt, rõ ràng, thực dụng — GV đọc là dùng �
   const [generatingQsFromPassage, setGeneratingQsFromPassage] = useState(false);
   const generateQuestionsFromPassageAI = async () => {
     if (!form.passageContent) { alert('Chưa có ngữ liệu! Nhập nội dung ngữ liệu trước.'); return; }
+    if (form.questions.length > 0 && !confirm(`Đã có ${form.questions.length} câu hỏi. AI tạo mới sẽ THAY THẾ toàn bộ câu hỏi hiện tại. Tiếp tục?`)) return;
     const apiKey = getGroqApiKey();
     if (!getClaudeApiKey() && !getGroqApiKey() && !getUseOllama()) { alert('Cần cấu hình AI (Claude / Groq / Ollama) trong ⚙️ Cài đặt AI trước.'); return; }
     setGeneratingQsFromPassage(true);
@@ -3474,6 +3470,7 @@ Chú ý: Câu hỏi Đọc hiểu phải bám sát ngữ liệu. Câu Viết ph�
   };
 
   const generateAI = () => {
+    if (form.questions.length > 0 && !confirm(`Đã có ${form.questions.length} câu hỏi. Tạo từ ngân hàng câu hỏi sẽ THAY THẾ toàn bộ câu hỏi hiện tại. Tiếp tục?`)) return;
     const chuDe = form.theme || (CHU_DE_THEO_LOP[form.grade] || [])[0] || 'Chủ đề';
     const bankPassages = passagesForGrade.filter(p => p.genre === form.passageGenre);
     const passage = bankPassages.length > 0
@@ -3550,6 +3547,7 @@ Chú ý: Câu hỏi Đọc hiểu phải bám sát ngữ liệu. Câu Viết ph�
 
   // ── AI sinh đề Thi vào lớp 10 ──
   const generateVao10AI = () => {
+    if (form.questions.length > 0 && !confirm(`Đã có ${form.questions.length} câu hỏi. Tạo từ ngân hàng câu hỏi sẽ THAY THẾ toàn bộ câu hỏi hiện tại. Tiếp tục?`)) return;
     const p1Bank = passagesForGrade.filter(p => p.genre === (form.passageGenre || 'van_hoc'));
     const p2Bank = allPassages.filter(p => p.genre === 'van_hoc' && (p.class >= 8 || !p.class));
     const passage1 = p1Bank.length > 0 ? p1Bank[Math.floor(Math.random() * p1Bank.length)] : SAMPLE_PASSAGES[0];
@@ -3901,7 +3899,7 @@ Chú ý: Câu hỏi Đọc hiểu phải bám sát ngữ liệu. Câu Viết ph�
               {form.questions.length > 0 && (
                 <div className="mt-3 pt-3 border-t flex items-center justify-between">
                   <span className="text-xs text-slate-500">📋 {form.questions.length} câu · Tổng: <strong>{form.questions.reduce((s, q) => s + (q.score || 0), 0).toFixed(1)}đ</strong></span>
-                  <button onClick={() => setForm({ ...form, questions: [], answerKey: '', rubric: [] })} className="text-xs text-red-400 hover:text-red-600">🗑 Xóa tất cả câu hỏi</button>
+                  <button onClick={() => { if (confirm('Xóa toàn bộ câu hỏi, đáp án và rubric hiện có?')) setForm({ ...form, questions: [], answerKey: '', rubric: [] }); }} className="text-xs text-red-400 hover:text-red-600">🗑 Xóa tất cả câu hỏi</button>
                 </div>
               )}
               {/* ── Nhập câu hỏi thủ công (dùng khi questions rỗng hoặc muốn ghi tự do) ── */}
@@ -5296,6 +5294,7 @@ const AutoGenExamView = ({ data, setData, selectedClass, teacherName, schoolName
       alert('Không có ngữ liệu phù hợp. Hãy thêm ngữ liệu vào Kho Ngữ Liệu trước!');
       return;
     }
+    if (generatedExam && !confirm('Đề vừa tạo trước đó chưa lưu sẽ bị mất khi tạo đề mới. Tiếp tục?')) return;
     setGenerating(true);
     try {
       const passage = passagesForSelection[Math.floor(Math.random() * passagesForSelection.length)];
